@@ -1,3 +1,12 @@
+# --- Secrets & Environment Variables (Must Have) ---
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*.cert
+
 # Logs
 logs
 *.log
@@ -7,16 +16,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies & Build Outputs
+node_modules/
+dist/
+dist-ssr/
+build/
 *.local
 
-# Editor directories and files
+# Local Hosting & Deployment Folders
+.netlify/
+.vercel/
+
+# Editor & OS files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
