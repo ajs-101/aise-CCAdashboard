@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import supabase from '../supabase'
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL
+const API_URL = import.meta.env.VITE_API_URL || 'https://aise-cold-caller-production.up.railway.app'
 
 export default function Messages() {
   const [conversations, setConversations] = useState([])
