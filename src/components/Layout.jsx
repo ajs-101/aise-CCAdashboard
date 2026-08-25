@@ -34,7 +34,7 @@ export default function Layout({ onLogout }) {
             { to: '/dnc', label: 'Do Not Call', icon: '⊘' },
             { to: '/summaries', label: 'Summaries', icon: '📋' },
             { to: '/messages', label: 'Messages', icon: '💬' },
-          ].map(({ to, label, icon }) => (
+          ].map(({ to, label, icon }) => (  
             <NavLink
               key={to}
               to={to}
