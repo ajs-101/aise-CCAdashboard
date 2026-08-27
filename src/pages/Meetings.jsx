@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://aise-cold-caller-production.up.railway.app'
+const API_URL = import.meta.env.VITE_API_URL || 'https://aise-cold-caller.onrender.com'
 
 export default function Meetings() {
   const [meetings, setMeetings] = useState([])
