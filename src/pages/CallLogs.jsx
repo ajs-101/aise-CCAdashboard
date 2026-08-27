@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import supabase from '../supabase'
 
+const API_URL = import.meta.env.DEV
+  ? 'http://localhost:3000'
+  : (import.meta.env.VITE_API_URL || 'http://localhost:3000')
+
+const getRecordingUrl = (call) => {
+  if (!call) return null
+  if (call.call_id) {
+    return `${API_URL}/api/recording/${call.call_id}`
+  }
+  return call.recording_url
+}
+
 export default function CallLogs() {
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
@@ -259,7 +271,7 @@ export default function CallLogs() {
             </div>
           )}
 
-          {selected.recording_url && (
+          {(selected.recording_url || selected.call_id) && (
             <div style={{ marginTop: '16px' }}>
               <p style={{
                 fontSize: '11px',
@@ -271,7 +283,7 @@ export default function CallLogs() {
               }}>Recording</p>
               <audio
                 controls
-                src={selected.recording_url}
+                src={getRecordingUrl(selected)}
                 style={{ width: '100%', borderRadius: '8px' }}
               />
             </div>

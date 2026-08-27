@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react'
 import supabase from '../supabase'
 
+const API_URL = import.meta.env.DEV
+  ? 'http://localhost:3000'
+  : (import.meta.env.VITE_API_URL || 'http://localhost:3000')
+
+const getRecordingUrl = (call) => {
+  if (!call) return null
+  if (call.call_id) {
+    return `${API_URL}/api/recording/${call.call_id}`
+  }
+  return call.recording_url
+}
+
 export default function Summaries() {
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteInputText, setDeleteInputText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -32,6 +45,7 @@ export default function Summaries() {
   }
 
   const handleDeleteAll = async function() {
+    if (deleteInputText !== 'DELETE ALL') return
     setDeleting(true)
     await supabase.from('calls').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     await supabase.from('messages').delete().neq('id', '00000000-0000-0000-0000-000000000000')
@@ -39,6 +53,7 @@ export default function Summaries() {
     setSelected(null)
     setCalls([])
     setConfirmDelete(false)
+    setDeleteInputText('')
     setDeleting(false)
   }
 
@@ -98,7 +113,7 @@ export default function Summaries() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Detailed breakdown of every call</p>
         </div>
         <button
-          onClick={function() { setConfirmDelete('all') }}
+          onClick={function() { setConfirmDelete('all'); setDeleteInputText(''); }}
           style={{ padding: '8px 16px', background: 'rgba(255,71,87,0.1)', border: '1px solid var(--accent-red)', borderRadius: '10px', color: 'var(--accent-red)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
         >
           Clear All Test Data
@@ -111,14 +126,38 @@ export default function Summaries() {
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '700', marginBottom: '12px' }}>
               {confirmDelete === 'all' ? 'Clear All Data?' : 'Delete This Call?'}
             </h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.6' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.6' }}>
               {confirmDelete === 'all'
-                ? 'This will permanently delete ALL calls, messages, and do-not-call entries. This cannot be undone. Use this to clear test data before going live.'
+                ? 'This will permanently delete ALL calls, messages, and do-not-call entries. This cannot be undone.'
                 : 'This will permanently delete this call record including its summary, transcript, and recording. This cannot be undone.'}
             </p>
+            {confirmDelete === 'all' && (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Type <strong style={{ color: 'var(--accent-red)' }}>DELETE ALL</strong> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteInputText}
+                  onChange={function(e) { setDeleteInputText(e.target.value) }}
+                  placeholder="DELETE ALL"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    fontFamily: 'monospace',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
-                onClick={function() { setConfirmDelete(false) }}
+                onClick={function() { setConfirmDelete(false); setDeleteInputText(''); }}
                 disabled={deleting}
                 style={{ padding: '10px 20px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '10px', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}
               >
@@ -126,8 +165,17 @@ export default function Summaries() {
               </button>
               <button
                 onClick={confirmDelete === 'all' ? handleDeleteAll : handleDelete}
-                disabled={deleting}
-                style={{ padding: '10px 20px', background: deleting ? 'rgba(255,71,87,0.3)' : 'var(--accent-red)', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                disabled={deleting || (confirmDelete === 'all' && deleteInputText !== 'DELETE ALL')}
+                style={{
+                  padding: '10px 20px',
+                  background: deleting || (confirmDelete === 'all' && deleteInputText !== 'DELETE ALL') ? 'rgba(255,71,87,0.3)' : 'var(--accent-red)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: deleting || (confirmDelete === 'all' && deleteInputText !== 'DELETE ALL') ? 'not-allowed' : 'pointer'
+                }}
               >
                 {deleting ? 'Deleting...' : confirmDelete === 'all' ? 'Delete Everything' : 'Delete Call'}
               </button>
@@ -217,10 +265,10 @@ export default function Summaries() {
               </p>
             </div>
 
-            {selected.recording_url ? (
+            {(selected.recording_url || selected.call_id) ? (
               <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px', marginBottom: '16px' }}>
                 <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '15px', fontWeight: '700', marginBottom: '12px' }}>Recording</h3>
-                <audio controls src={selected.recording_url} style={{ width: '100%' }} />
+                <audio controls src={getRecordingUrl(selected)} style={{ width: '100%' }} />
               </div>
             ) : null}
 
