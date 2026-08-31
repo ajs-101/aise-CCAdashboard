@@ -79,7 +79,7 @@ const StatCard = ({ label, value, color, icon: Icon, trend, subtitle }) => {
 
       <div style={{
         fontSize: "30px",
-        fontFamily: "var(--font-display)",
+        fontFamily: "var(--font-body)",
         fontWeight: "800",
         color: "#ffffff",
         marginBottom: "4px",

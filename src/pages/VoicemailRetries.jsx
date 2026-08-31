@@ -575,7 +575,7 @@ export default function VoicemailRetries() {
             style={{
               fontSize: "28px",
               fontWeight: "800",
-              fontFamily: "var(--font-display)",
+              fontFamily: "var(--font-body)",
               color: "var(--text-primary)",
             }}
           >
@@ -603,7 +603,7 @@ export default function VoicemailRetries() {
             style={{
               fontSize: "28px",
               fontWeight: "800",
-              fontFamily: "var(--font-display)",
+              fontFamily: "var(--font-body)",
               color: "#ffaa00",
             }}
           >
@@ -635,7 +635,7 @@ export default function VoicemailRetries() {
             style={{
               fontSize: "28px",
               fontWeight: "800",
-              fontFamily: "var(--font-display)",
+              fontFamily: "var(--font-body)",
               color: "var(--accent)",
             }}
           >
@@ -667,7 +667,7 @@ export default function VoicemailRetries() {
             style={{
               fontSize: "28px",
               fontWeight: "800",
-              fontFamily: "var(--font-display)",
+              fontFamily: "var(--font-body)",
               color: "var(--accent-red)",
             }}
           >

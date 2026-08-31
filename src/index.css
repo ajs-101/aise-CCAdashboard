@@ -28,8 +28,9 @@
   --border-accent: rgba(0, 212, 255, 0.25);
   --border-hover: rgba(0, 212, 255, 0.45);
 
-  --font-display: 'Syne', sans-serif;
+  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-stat: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
   --glass-bg: rgba(13, 19, 33, 0.7);
   --glass-border: 1px solid rgba(255, 255, 255, 0.08);
