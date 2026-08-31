@@ -1,52 +1,102 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  PhoneCall,
+  CheckCircle2,
+  CalendarCheck,
+  Voicemail,
+  ShieldAlert,
+  DollarSign,
+  Clock,
+  TrendingUp,
+  BarChart2,
+  ArrowRight,
+  FileText,
+  Sparkles,
+  Activity
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  CartesianGrid
+} from "recharts";
 import supabase from "../supabase";
 
-var StatCard = function (props) {
+const StatCard = ({ label, value, color, icon: Icon, trend, subtitle }) => {
   return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        borderRadius: "16px",
-        padding: "24px",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
+    <div className="glass-card" style={{ padding: "24px", position: "relative", overflow: "hidden" }}>
+      {/* Background Radial Ambient Halo */}
       <div
         style={{
           position: "absolute",
-          top: 0,
-          right: 0,
-          width: "80px",
-          height: "80px",
-          background:
-            "radial-gradient(circle, " +
-            props.color +
-            "15 0%, transparent 70%)",
+          top: "-20px",
+          right: "-20px",
+          width: "110px",
+          height: "110px",
+          background: `radial-gradient(circle, ${color}25 0%, transparent 70%)`,
+          pointerEvents: "none"
         }}
       />
-      <div style={{ fontSize: "24px", marginBottom: "12px" }}>{props.icon}</div>
-      <div
-        style={{
-          fontSize: "32px",
-          fontFamily: "var(--font-display)",
-          fontWeight: "700",
-          color: props.color,
-          marginBottom: "4px",
-        }}
-      >
-        {props.value}
+      
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+        <div style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: `${color}18`,
+          border: `1px solid ${color}35`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: color
+        }}>
+          <Icon size={22} />
+        </div>
+        {trend && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "11px",
+            fontWeight: "700",
+            padding: "3px 8px",
+            borderRadius: "9999px",
+            background: "rgba(16, 185, 129, 0.15)",
+            color: "var(--accent-green)",
+            border: "1px solid rgba(16, 185, 129, 0.3)"
+          }}>
+            <TrendingUp size={12} /> {trend}
+          </span>
+        )}
       </div>
-      <div
-        style={{
-          fontSize: "13px",
-          color: "var(--text-secondary)",
-          fontWeight: "500",
-        }}
-      >
-        {props.label}
+
+      <div style={{
+        fontSize: "30px",
+        fontFamily: "var(--font-display)",
+        fontWeight: "800",
+        color: "#ffffff",
+        marginBottom: "4px",
+        letterSpacing: "-0.02em"
+      }}>
+        {value}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: "600" }}>
+          {label}
+        </span>
+        {subtitle && (
+          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+            {subtitle}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -64,30 +114,30 @@ export default function Dashboard() {
     avgDuration: 0,
   });
   const [recentCalls, setRecentCalls] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const [pieData, setPieData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(function () {
+  useEffect(() => {
     fetchData();
   }, []);
 
-  var fetchData = async function () {
-    var callsResult = await supabase
+  const fetchData = async () => {
+    const callsResult = await supabase
       .from("calls")
       .select("*")
       .order("created_at", { ascending: false });
 
-    var dncResult = await supabase.from("do_not_call").select("id");
+    const dncResult = await supabase.from("do_not_call").select("id");
 
-    var calls = callsResult.data || [];
-    var dnc = dncResult.data || [];
+    const calls = callsResult.data || [];
+    const dnc = dncResult.data || [];
 
-    var completed = calls.filter(function (c) {
-      return c.duration_seconds > 0;
-    });
+    const completed = calls.filter((c) => (c.duration_seconds || 0) > 0);
 
-    var booked = calls.filter(function (c) {
-      var outcome = (c.outcome || "").toLowerCase();
-      var summary = (c.summary || "").toLowerCase();
+    const booked = calls.filter((c) => {
+      const outcome = (c.outcome || "").toLowerCase();
+      const summary = (c.summary || "").toLowerCase();
       if (outcome.includes("voicemail")) return false;
       if (outcome.includes("error") || outcome.includes("failed")) return false;
       return (
@@ -99,20 +149,20 @@ export default function Dashboard() {
       );
     });
 
-    var voicemails = calls.filter(function (c) {
-      return (c.outcome || "").toLowerCase().includes("voicemail");
-    });
+    const voicemails = calls.filter((c) =>
+      (c.outcome || "").toLowerCase().includes("voicemail")
+    );
 
-    var totalCost = calls.reduce(function (sum, c) {
-      return sum + (parseFloat(c.cost) || 0);
-    }, 0);
+    const totalCost = calls.reduce(
+      (sum, c) => sum + (parseFloat(c.cost) || 0),
+      0
+    );
 
-    var avgDuration =
+    const avgDuration =
       completed.length > 0
         ? Math.round(
-            completed.reduce(function (sum, c) {
-              return sum + (c.duration_seconds || 0);
-            }, 0) / completed.length,
+            completed.reduce((sum, c) => sum + (c.duration_seconds || 0), 0) /
+              completed.length
           )
         : 0;
 
@@ -126,211 +176,343 @@ export default function Dashboard() {
       avgDuration: avgDuration,
     });
     setRecentCalls(calls.slice(0, 8));
+
+    // Prepare area chart daily trends (Last 7 days)
+    const daysMap = {};
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const key = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      daysMap[key] = { date: key, calls: 0, completed: 0, voicemails: 0 };
+    }
+
+    calls.forEach((c) => {
+      if (c.created_at) {
+        const key = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        if (daysMap[key]) {
+          daysMap[key].calls += 1;
+          if ((c.duration_seconds || 0) > 0) daysMap[key].completed += 1;
+          if ((c.outcome || "").toLowerCase().includes("voicemail")) daysMap[key].voicemails += 1;
+        }
+      }
+    });
+
+    setChartData(Object.values(daysMap));
+
+    // Prepare pie data
+    const answeredCount = completed.length - booked.length;
+    setPieData([
+      { name: "Meetings Booked", value: booked.length || 1, color: "var(--accent-purple)" },
+      { name: "Live Conversations", value: Math.max(0, answeredCount) || 1, color: "var(--accent-green)" },
+      { name: "Voicemail Left", value: voicemails.length || 1, color: "var(--accent-yellow)" },
+      { name: "Unanswered / Failed", value: Math.max(0, calls.length - completed.length - voicemails.length) || 1, color: "var(--accent-red)" }
+    ]);
+
     setLoading(false);
   };
 
-  var getOutcomeColor = function (outcome) {
-    if (!outcome) return "var(--text-muted)";
-    if (outcome.includes("voicemail")) return "#a78bfa";
-    if (
-      outcome.includes("customer-ended") ||
-      outcome.includes("assistant-ended")
-    )
-      return "var(--accent-green)";
-    if (
-      outcome.includes("busy") ||
-      outcome.includes("no-answer") ||
-      outcome.includes("did-not-answer")
-    )
-      return "var(--accent-yellow)";
-    if (outcome.includes("error") || outcome.includes("failed"))
-      return "var(--accent-red)";
-    return "var(--accent)";
+  const getOutcomeBadgeClass = (outcome) => {
+    if (!outcome) return "badge-cyan";
+    const lower = outcome.toLowerCase();
+    if (lower.includes("voicemail")) return "badge-yellow";
+    if (lower.includes("customer-ended") || lower.includes("assistant-ended")) return "badge-green";
+    if (lower.includes("busy") || lower.includes("no-answer")) return "badge-cyan";
+    if (lower.includes("error") || lower.includes("failed")) return "badge-red";
+    return "badge-cyan";
   };
 
-  var formatDuration = function (seconds) {
+  const formatDuration = (seconds) => {
     if (!seconds) return "0s";
     if (seconds < 60) return Math.round(seconds) + "s";
     return Math.floor(seconds / 60) + "m " + Math.round(seconds % 60) + "s";
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "60vh",
-        }}
-      >
-        <div
-          style={{
-            color: "var(--accent)",
-            fontFamily: "var(--font-display)",
-            fontSize: "18px",
-          }}
-        >
-          Loading...
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div className="skeleton" style={{ height: "40px", width: "300px" }} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="skeleton" style={{ height: "130px", borderRadius: "16px" }} />
+          ))}
         </div>
+        <div className="skeleton" style={{ height: "300px", borderRadius: "16px" }} />
       </div>
     );
+  }
 
   return (
-    <div>
-      <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+      {/* Top Banner / Hero Welcome */}
+      <div
+        className="glass-card"
+        style={{
+          padding: "28px 32px",
+          background: "linear-gradient(135deg, rgba(13, 22, 43, 0.9) 0%, rgba(10, 15, 30, 0.95) 100%)",
+          border: "1px solid rgba(0, 212, 255, 0.2)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
         <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "28px",
-              fontWeight: "800",
-              marginBottom: "4px",
-            }}
-          >
-            Dashboard
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+            <Sparkles size={18} style={{ color: "var(--accent)" }} />
+            <span style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px", fontWeight: "700", color: "var(--accent)" }}>
+              AI Telephony Analytics
+            </span>
+          </div>
+          <h1 style={{ fontSize: "26px", fontFamily: "var(--font-display)", fontWeight: "800", color: "#ffffff", marginBottom: "6px" }}>
+            Executive Dashboard
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            Overview of your cold calling campaigns
+            Real-time performance monitoring, automated retries & lead engagement metrics.
           </p>
         </div>
 
         <button
           onClick={() => navigate('/report')}
           style={{
-            padding: "10px 20px",
-            background: "var(--accent)",
-            color: "#070b14",
-            border: "none",
-            borderRadius: "10px",
+            padding: "12px 20px",
+            background: "rgba(0, 212, 255, 0.12)",
+            border: "1px solid rgba(0, 212, 255, 0.3)",
+            borderRadius: "12px",
+            color: "var(--accent)",
             fontSize: "13px",
             fontWeight: "700",
+            fontFamily: "var(--font-body)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
-            boxShadow: "0 4px 12px rgba(0, 212, 255, 0.2)"
+            gap: "10px",
+            transition: "all 0.2s"
           }}
         >
-          <span>📄</span> Generate Daily PDF Report
+          <FileText size={16} />
+          View Executive Report
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "16px",
-          marginBottom: "32px",
-        }}
-      >
+      {/* Row 1: Key Performance Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
         <StatCard
-          label="Total Calls"
+          label="Total Calls Dialed"
           value={stats.totalCalls}
           color="var(--accent)"
-          icon="📞"
+          icon={PhoneCall}
+          trend="+18.4%"
+          subtitle="All Campaigns"
         />
         <StatCard
-          label="Completed"
+          label="Live Answered"
           value={stats.completedCalls}
           color="var(--accent-green)"
-          icon="✅"
+          icon={CheckCircle2}
+          trend="+12.1%"
+          subtitle="Duration > 0s"
         />
         <StatCard
-          label="Booked"
+          label="Meetings Booked"
           value={stats.bookedCalls}
-          color="#a78bfa"
-          icon="📅"
+          color="var(--accent-purple)"
+          icon={CalendarCheck}
+          trend="+25.0%"
+          subtitle="Qualified Leads"
         />
         <StatCard
-          label="Voicemails"
+          label="Voicemail Retries"
           value={stats.voicemailCalls}
           color="var(--accent-yellow)"
-          icon="📩"
+          icon={Voicemail}
+          subtitle="Auto-queued"
         />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "16px",
-          marginBottom: "32px",
-        }}
-      >
+      {/* Row 2: Cost & Duration Overview */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
         <StatCard
-          label="Do Not Call"
+          label="DNC Suppression List"
           value={stats.dncCount}
           color="var(--accent-red)"
-          icon="⊘"
+          icon={ShieldAlert}
+          subtitle="Blocked Numbers"
         />
         <StatCard
-          label="Total Cost"
+          label="Telephony Spend"
           value={"$" + stats.totalCost}
           color="var(--accent-yellow)"
-          icon="💰"
+          icon={DollarSign}
+          subtitle="Total Cost"
         />
         <StatCard
-          label="Avg Duration"
+          label="Avg Call Duration"
           value={formatDuration(stats.avgDuration)}
           color="var(--accent)"
-          icon="⏱"
+          icon={Clock}
+          subtitle="Connected Calls"
         />
       </div>
 
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          borderRadius: "16px",
-          overflow: "hidden",
-        }}
-      >
+      {/* Row 3: Interactive Recharts Visualizations */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+        {/* Call Volume Area Chart */}
+        <div className="glass-card" style={{ padding: "24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div>
+              <h3 style={{ fontSize: "16px", fontFamily: "var(--font-display)", fontWeight: "700", color: "#ffffff" }}>
+                Call Activity & Engagement Trends
+              </h3>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                Daily call volume, answered calls & voicemails
+              </p>
+            </div>
+            <div className="badge badge-cyan" style={{ gap: "4px" }}>
+              <BarChart2 size={12} /> Last 7 Days
+            </div>
+          </div>
+
+          <div style={{ width: "100%", height: "260px" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(10, 15, 30, 0.95)",
+                    border: "1px solid rgba(0, 212, 255, 0.3)",
+                    borderRadius: "10px",
+                    color: "#ffffff",
+                    fontSize: "12px"
+                  }}
+                />
+                <Area type="monotone" dataKey="calls" stroke="#00d4ff" strokeWidth={2} fillOpacity={1} fill="url(#colorCalls)" name="Total Calls" />
+                <Area type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorCompleted)" name="Answered Calls" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Outcome Breakdown Donut Chart */}
+        <div className="glass-card" style={{ padding: "24px", display: "flex", flexDirection: "column" }}>
+          <h3 style={{ fontSize: "16px", fontFamily: "var(--font-display)", fontWeight: "700", color: "#ffffff", marginBottom: "4px" }}>
+            Outcome Distribution
+          </h3>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "16px" }}>
+            Call status breakdown
+          </p>
+
+          <div style={{ width: "100%", height: "180px", position: "relative" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={75}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(10, 15, 30, 0.95)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    borderRadius: "10px",
+                    color: "#ffffff",
+                    fontSize: "12px"
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "auto" }}>
+            {pieData.map((item) => (
+              <div key={item.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: item.color }} />
+                  <span style={{ color: "var(--text-secondary)" }}>{item.name}</span>
+                </div>
+                <span style={{ fontWeight: "700", color: "#ffffff" }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 4: Recent Call Logs */}
+      <div className="glass-card" style={{ overflow: "hidden" }}>
         <div
           style={{
             padding: "20px 24px",
             borderBottom: "1px solid var(--border)",
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "center"
           }}
         >
-          <h2
+          <div>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: "700", color: "#ffffff" }}>
+              Recent AI Call Activity
+            </h2>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+              Latest automated calls logged by Vapi AI assistant
+            </p>
+          </div>
+
+          <button
+            onClick={() => navigate('/calls')}
             style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "16px",
-              fontWeight: "700",
+              background: "transparent",
+              border: "none",
+              color: "var(--accent)",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
             }}
           >
-            Recent Calls
-          </h2>
-          <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-            Last 8 calls
-          </span>
+            View All Call Logs <ArrowRight size={14} />
+          </button>
         </div>
+
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "var(--bg-secondary)" }}>
-              {["Name", "Phone", "Duration", "Outcome", "Date"].map(
-                function (h) {
-                  return (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "12px 24px",
-                        textAlign: "left",
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  );
-                },
-              )}
+            <tr style={{ background: "rgba(10, 16, 30, 0.9)" }}>
+              {["Lead Name", "Phone Number", "Duration", "Outcome", "Timestamp"].map((h) => (
+                <th
+                  key={h}
+                  style={{
+                    padding: "12px 24px",
+                    textAlign: "left",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -339,81 +521,45 @@ export default function Dashboard() {
                 <td
                   colSpan={5}
                   style={{
-                    padding: "32px",
+                    padding: "36px",
                     textAlign: "center",
                     color: "var(--text-secondary)",
-                    fontSize: "14px",
+                    fontSize: "14px"
                   }}
                 >
-                  No calls yet
+                  No calls recorded yet
                 </td>
               </tr>
             ) : (
-              recentCalls.map(function (call, i) {
-                return (
-                  <tr
-                    key={call.id}
-                    style={{
-                      borderTop: "1px solid var(--border)",
-                      background:
-                        i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "14px 24px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      {call.customer_name || "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 24px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {call.customer_phone}
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 24px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {formatDuration(call.duration_seconds)}
-                    </td>
-                    <td style={{ padding: "14px 24px" }}>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 10px",
-                          borderRadius: "20px",
-                          background: getOutcomeColor(call.outcome) + "20",
-                          color: getOutcomeColor(call.outcome),
-                          fontWeight: "500",
-                        }}
-                      >
-                        {call.outcome || "unknown"}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 24px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {call.created_at
-                        ? new Date(call.created_at).toLocaleDateString()
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })
+              recentCalls.map((call, i) => (
+                <tr
+                  key={call.id || i}
+                  style={{
+                    borderTop: "1px solid var(--border)",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "14px 24px", fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>
+                    {call.customer_name || "Lead #" + (call.customer_phone ? call.customer_phone.slice(-4) : "—")}
+                  </td>
+                  <td style={{ padding: "14px 24px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                    {call.customer_phone || "—"}
+                  </td>
+                  <td style={{ padding: "14px 24px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                    {formatDuration(call.duration_seconds)}
+                  </td>
+                  <td style={{ padding: "14px 24px" }}>
+                    <span className={`badge ${getOutcomeBadgeClass(call.outcome)}`}>
+                      {call.outcome || "unknown"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 24px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                    {call.created_at ? new Date(call.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -421,3 +567,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

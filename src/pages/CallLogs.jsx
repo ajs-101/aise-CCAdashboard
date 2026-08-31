@@ -1,10 +1,23 @@
 import { useState, useEffect } from "react";
+import {
+  Search,
+  Filter,
+  PhoneCall,
+  X,
+  Volume2,
+  FileText,
+  Clock,
+  User,
+  Phone,
+  DollarSign,
+  Calendar,
+  Sparkles
+} from "lucide-react";
 import supabase from "../supabase";
 
 const API_URL = import.meta.env.DEV
   ? "http://localhost:3000"
-  : import.meta.env.VITE_API_URL ||
-    "https://aise-cold-caller.onrender.com";
+  : import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
 
 const getRecordingUrl = (call) => {
   if (!call) return null;
@@ -34,12 +47,14 @@ export default function CallLogs() {
     setLoading(false);
   };
 
-  const getOutcomeColor = (outcome) => {
-    if (!outcome) return "var(--text-muted)";
-    if (outcome.includes("customer-ended")) return "var(--accent-green)";
-    if (outcome.includes("busy")) return "var(--accent-yellow)";
-    if (outcome.includes("error")) return "var(--accent-red)";
-    return "var(--accent)";
+  const getOutcomeBadgeClass = (outcome) => {
+    if (!outcome) return "badge-cyan";
+    const lower = outcome.toLowerCase();
+    if (lower.includes("voicemail")) return "badge-yellow";
+    if (lower.includes("customer-ended") || lower.includes("assistant-ended")) return "badge-green";
+    if (lower.includes("busy") || lower.includes("no-answer")) return "badge-cyan";
+    if (lower.includes("error") || lower.includes("failed")) return "badge-red";
+    return "badge-cyan";
   };
 
   const formatDuration = (seconds) => {
@@ -58,113 +73,101 @@ export default function CallLogs() {
     return matchesFilter && matchesSearch;
   });
 
-  if (loading)
+  if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "60vh",
-        }}
-      >
-        <div
-          style={{
-            color: "var(--accent)",
-            fontFamily: "var(--font-display)",
-            fontSize: "18px",
-          }}
-        >
-          Loading...
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div className="skeleton" style={{ height: "48px", borderRadius: "12px" }} />
+        <div className="skeleton" style={{ height: "400px", borderRadius: "16px" }} />
       </div>
     );
+  }
 
   return (
-    <div style={{ display: "flex", gap: "24px" }}>
-      {/* Left - calls list */}
-      <div style={{ flex: 1 }}>
-        {/* Header */}
-        <div style={{ marginBottom: "24px" }}>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "28px",
-              fontWeight: "800",
-              marginBottom: "4px",
-            }}
-          >
-            Call Logs
-          </h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
-            {calls.length} total calls recorded
-          </p>
-        </div>
-
-        {/* Search and filter */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-          <input
-            type="text"
-            placeholder="Search by name or phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "10px 16px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "10px",
-              color: "var(--text-primary)",
-              fontSize: "14px",
-              fontFamily: "var(--font-body)",
-              outline: "none",
-            }}
-          />
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{
-              padding: "10px 16px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "10px",
-              color: "var(--text-primary)",
-              fontSize: "14px",
-              fontFamily: "var(--font-body)",
-              outline: "none",
-              cursor: "pointer",
-            }}
-          >
-            <option value="all">All outcomes</option>
-            <option value="customer-ended">Completed</option>
-            <option value="busy">Busy</option>
-            <option value="error">Error</option>
-          </select>
-        </div>
-
-        {/* Calls table */}
+    <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      {/* Left Main Content Table */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Search & Filter Toolbar */}
         <div
+          className="glass-card"
           style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "16px",
-            overflow: "hidden",
+            padding: "16px 20px",
+            display: "flex",
+            gap: "16px",
+            alignItems: "center"
           }}
         >
+          <div style={{ position: "relative", flex: 1 }}>
+            <Search
+              size={18}
+              style={{
+                position: "absolute",
+                left: "14px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted)"
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search by lead name or phone number..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 14px 10px 42px",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border)",
+                borderRadius: "10px",
+                color: "#ffffff",
+                fontSize: "14px",
+                fontFamily: "var(--font-body)",
+                outline: "none"
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Filter size={16} style={{ color: "var(--text-muted)" }} />
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{
+                padding: "10px 16px",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border)",
+                borderRadius: "10px",
+                color: "var(--text-primary)",
+                fontSize: "14px",
+                fontFamily: "var(--font-body)",
+                outline: "none",
+                cursor: "pointer"
+              }}
+            >
+              <option value="all">All Outcomes</option>
+              <option value="customer-ended">Completed</option>
+              <option value="voicemail">Voicemail</option>
+              <option value="busy">Busy / No Answer</option>
+              <option value="error">Error / Failed</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Calls Table */}
+        <div className="glass-card" style={{ overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "var(--bg-secondary)" }}>
-                {["Name", "Phone", "Duration", "Outcome", "Date"].map((h) => (
+              <tr style={{ background: "rgba(10, 16, 30, 0.9)" }}>
+                {["Lead Name", "Phone", "Duration", "Outcome", "Date & Time"].map((h) => (
                   <th
                     key={h}
                     style={{
-                      padding: "12px 20px",
+                      padding: "14px 20px",
                       textAlign: "left",
                       fontSize: "11px",
-                      fontWeight: "600",
+                      fontWeight: "700",
                       color: "var(--text-muted)",
                       textTransform: "uppercase",
-                      letterSpacing: "0.5px",
+                      letterSpacing: "0.5px"
                     }}
                   >
                     {h}
@@ -178,251 +181,176 @@ export default function CallLogs() {
                   <td
                     colSpan={5}
                     style={{
-                      padding: "32px",
+                      padding: "48px",
                       textAlign: "center",
                       color: "var(--text-secondary)",
-                      fontSize: "14px",
+                      fontSize: "14px"
                     }}
                   >
-                    No calls found
+                    No call logs matching search criteria
                   </td>
                 </tr>
               ) : (
-                filtered.map((call, i) => (
-                  <tr
-                    key={call.id}
-                    onClick={() => setSelected(call)}
-                    style={{
-                      borderTop: "1px solid var(--border)",
-                      background:
-                        selected?.id === call.id
-                          ? "var(--accent-dim)"
-                          : i % 2 === 0
-                            ? "transparent"
-                            : "rgba(255,255,255,0.01)",
-                      cursor: "pointer",
-                      transition: "background 0.15s",
-                    }}
-                  >
-                    <td
+                filtered.map((call, i) => {
+                  const isSelected = selected?.id === call.id;
+                  return (
+                    <tr
+                      key={call.id || i}
+                      onClick={() => setSelected(call)}
                       style={{
-                        padding: "14px 20px",
-                        fontSize: "14px",
-                        fontWeight: "500",
+                        borderTop: "1px solid var(--border)",
+                        background: isSelected ? "rgba(0, 212, 255, 0.08)" : "transparent",
+                        cursor: "pointer",
+                        transition: "background 0.2s"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "transparent";
                       }}
                     >
-                      {call.customer_name || "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 20px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {call.customer_phone}
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 20px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {formatDuration(call.duration_seconds)}
-                    </td>
-                    <td style={{ padding: "14px 20px" }}>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 10px",
-                          borderRadius: "20px",
-                          background: `${getOutcomeColor(call.outcome)}20`,
-                          color: getOutcomeColor(call.outcome),
-                          fontWeight: "500",
-                        }}
-                      >
-                        {call.outcome || "unknown"}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: "14px 20px",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {call.created_at
-                        ? new Date(call.created_at).toLocaleDateString()
-                        : "—"}
-                    </td>
-                  </tr>
-                ))
+                      <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>
+                        {call.customer_name || "Lead #" + (call.customer_phone ? call.customer_phone.slice(-4) : "—")}
+                      </td>
+                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                        {call.customer_phone}
+                      </td>
+                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                        {formatDuration(call.duration_seconds)}
+                      </td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <span className={`badge ${getOutcomeBadgeClass(call.outcome)}`}>
+                          {call.outcome || "unknown"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "14px 20px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                        {call.created_at ? new Date(call.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Right - call detail panel */}
+      {/* Right Drawer: Call Details */}
       {selected && (
         <div
+          className="glass-card animate-fade-in"
           style={{
-            width: "340px",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "16px",
+            width: "360px",
             padding: "24px",
-            height: "fit-content",
             position: "sticky",
-            top: "32px",
+            top: "92px"
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <h3
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "16px",
-                fontWeight: "700",
-              }}
-            >
-              Call Details
-            </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <PhoneCall size={18} style={{ color: "var(--accent)" }} />
+              <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: "700", color: "#ffffff" }}>
+                Call Details
+              </h3>
+            </div>
             <button
               onClick={() => setSelected(null)}
               style={{
-                background: "none",
+                background: "transparent",
                 border: "none",
                 color: "var(--text-secondary)",
                 cursor: "pointer",
-                fontSize: "18px",
+                padding: "4px"
               }}
             >
-              ✕
+              <X size={18} />
             </button>
           </div>
 
           {[
-            { label: "Name", value: selected.customer_name || "—" },
-            { label: "Phone", value: selected.customer_phone },
-            {
-              label: "Duration",
-              value: formatDuration(selected.duration_seconds),
-            },
-            { label: "Outcome", value: selected.outcome || "unknown" },
-            {
-              label: "Cost",
-              value: selected.cost ? `$${selected.cost}` : "$0",
-            },
-            {
-              label: "Date",
-              value: selected.created_at
-                ? new Date(selected.created_at).toLocaleString()
-                : "—",
-            },
-          ].map(({ label, value }) => (
+            { label: "Lead Name", value: selected.customer_name || "—", icon: User },
+            { label: "Phone Number", value: selected.customer_phone, icon: Phone },
+            { label: "Duration", value: formatDuration(selected.duration_seconds), icon: Clock },
+            { label: "Outcome", value: selected.outcome || "unknown", icon: Sparkles },
+            { label: "Cost", value: selected.cost ? `$${selected.cost}` : "$0", icon: DollarSign },
+            { label: "Date Logged", value: selected.created_at ? new Date(selected.created_at).toLocaleString() : "—", icon: Calendar },
+          ].map(({ label, value, icon: Icon }) => (
             <div
               key={label}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
+                alignItems: "center",
                 padding: "10px 0",
                 borderBottom: "1px solid var(--border)",
-                fontSize: "13px",
+                fontSize: "13px"
               }}
             >
-              <span style={{ color: "var(--text-secondary)" }}>{label}</span>
-              <span
-                style={{
-                  fontWeight: "500",
-                  maxWidth: "180px",
-                  textAlign: "right",
-                }}
-              >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)" }}>
+                <Icon size={14} style={{ color: "var(--text-muted)" }} />
+                <span>{label}</span>
+              </div>
+              <span style={{ fontWeight: "600", color: "#ffffff", textAlign: "right" }}>
                 {value}
               </span>
             </div>
           ))}
 
           {selected.summary && (
-            <div style={{ marginTop: "16px" }}>
-              <p
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: "8px",
-                }}
-              >
-                Summary
-              </p>
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "var(--text-secondary)",
-                  lineHeight: "1.6",
-                }}
-              >
+            <div style={{ marginTop: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <FileText size={14} style={{ color: "var(--accent)" }} />
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  AI Conversation Summary
+                </span>
+              </div>
+              <div style={{
+                background: "var(--bg-input)",
+                border: "1px solid var(--border)",
+                borderRadius: "10px",
+                padding: "12px",
+                fontSize: "13px",
+                color: "var(--text-secondary)",
+                lineHeight: "1.6"
+              }}>
                 {selected.summary}
-              </p>
+              </div>
             </div>
           )}
 
           {(selected.recording_url || selected.call_id) && (
-            <div style={{ marginTop: "16px" }}>
-              <p
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: "8px",
-                }}
-              >
-                Recording
-              </p>
+            <div style={{ marginTop: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <Volume2 size={14} style={{ color: "var(--accent-green)" }} />
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Audio Recording
+                </span>
+              </div>
               <audio
                 controls
                 src={getRecordingUrl(selected)}
-                style={{ width: "100%", borderRadius: "8px" }}
+                style={{ width: "100%", borderRadius: "8px", filter: "invert(0.9) hue-rotate(180deg)" }}
               />
             </div>
           )}
 
           {selected.transcript && (
-            <div style={{ marginTop: "16px" }}>
-              <p
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                  marginBottom: "8px",
-                }}
-              >
+            <div style={{ marginTop: "20px" }}>
+              <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
                 Transcript
-              </p>
+              </span>
               <div
                 style={{
-                  maxHeight: "200px",
+                  maxHeight: "180px",
                   overflowY: "auto",
                   fontSize: "12px",
                   color: "var(--text-secondary)",
                   lineHeight: "1.7",
-                  background: "var(--bg-secondary)",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border)",
                   padding: "12px",
-                  borderRadius: "8px",
+                  borderRadius: "10px"
                 }}
               >
                 {selected.transcript}
