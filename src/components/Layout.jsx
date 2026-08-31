@@ -30,10 +30,12 @@ export default function Layout({ onLogout }) {
             { to: '/', label: 'Dashboard', icon: '▦' },
             { to: '/campaigns', label: 'Campaigns', icon: '◈' },
             { to: '/calls', label: 'Call Logs', icon: '◎' },
+            { to: '/retries', label: 'Voicemail & Retries', icon: '📬' },
             { to: '/meetings', label: 'Meetings', icon: '📅' },
             { to: '/dnc', label: 'Do Not Call', icon: '⊘' },
             { to: '/summaries', label: 'Summaries', icon: '📋' },
             { to: '/messages', label: 'Messages', icon: '💬' },
+            { to: '/report', label: 'Daily Report', icon: '📄' },
           ].map(({ to, label, icon }) => (  
             <NavLink
               key={to}

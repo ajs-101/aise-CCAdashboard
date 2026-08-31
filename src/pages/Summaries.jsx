@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import supabase from '../supabase'
 
 const API_URL = import.meta.env.DEV
@@ -14,6 +15,7 @@ const getRecordingUrl = (call) => {
 }
 
 export default function Summaries() {
+  const navigate = useNavigate()
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -112,12 +114,20 @@ export default function Summaries() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: '800', marginBottom: '4px' }}>Call Summaries</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Detailed breakdown of every call</p>
         </div>
-        <button
-          onClick={function() { setConfirmDelete('all'); setDeleteInputText(''); }}
-          style={{ padding: '8px 16px', background: 'rgba(255,71,87,0.1)', border: '1px solid var(--accent-red)', borderRadius: '10px', color: 'var(--accent-red)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
-        >
-          Clear All Test Data
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={function() { navigate('/report') }}
+            style={{ padding: '8px 16px', background: 'var(--accent-dim)', border: '1px solid var(--border-hover)', borderRadius: '10px', color: 'var(--accent)', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>📄</span> Daily PDF Report
+          </button>
+          <button
+            onClick={function() { setConfirmDelete('all'); setDeleteInputText(''); }}
+            style={{ padding: '8px 16px', background: 'rgba(255,71,87,0.1)', border: '1px solid var(--accent-red)', borderRadius: '10px', color: 'var(--accent-red)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+          >
+            Clear All Test Data
+          </button>
+        </div>
       </div>
 
       {confirmDelete ? (

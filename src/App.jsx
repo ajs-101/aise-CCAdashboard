@@ -9,6 +9,8 @@ import Meetings from './pages/Meetings'
 import Layout from './components/Layout'
 import Summaries from './pages/Summaries'
 import Messages from './pages/Messages'
+import VoicemailRetries from './pages/VoicemailRetries'
+import DailyReport from './pages/DailyReport'
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -42,9 +44,11 @@ export default function App() {
           <Route path="campaigns" element={<Campaigns />} />
           <Route path="calls" element={<CallLogs />} />
           <Route path="meetings" element={<Meetings />} />
+          <Route path="retries" element={<VoicemailRetries />} />
           <Route path="dnc" element={<DoNotCall />} />
           <Route path="summaries" element={<Summaries />} />
           <Route path="messages" element={<Messages />} />
+          <Route path="report" element={<DailyReport />} />
         </Route>
       </Routes>
     </BrowserRouter>
