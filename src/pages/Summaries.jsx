@@ -194,7 +194,7 @@ export default function Summaries() {
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: '24px' }}>
+      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
         <div style={{ width: '300px', flexShrink: 0 }}>
           {calls.length === 0 ? (
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>No calls yet</div>
@@ -231,7 +231,14 @@ export default function Summaries() {
         </div>
 
         {selected ? (
-          <div style={{ flex: 1 }}>
+          <div style={{
+            flex: 1,
+            position: 'sticky',
+            top: '92px',
+            maxHeight: 'calc(100vh - 110px)',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }}>
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>

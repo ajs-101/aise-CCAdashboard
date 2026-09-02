@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import supabase from '../supabase'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import logo from '../logo.png'
 
 export default function DailyReport() {
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -261,24 +262,69 @@ export default function DailyReport() {
               padding: '36px 40px',
               boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
               borderRadius: '4px',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              position: 'relative',
+              overflow: 'hidden'
             }}
           >
-            {/* 1. Header Card */}
+            {/* Background Company Watermark */}
             <div style={{
-              background: '#0d1627',
-              borderRadius: '12px',
-              padding: '24px 30px',
-              color: '#ffffff',
-              marginBottom: '24px'
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              pointerEvents: 'none',
+              zIndex: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-around',
+              alignItems: 'center',
+              overflow: 'hidden',
+              padding: '80px 0',
             }}>
-              <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', letterSpacing: '-0.5px' }}>
-                Cold Calling Report
-              </h1>
-              <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#38bdf8', fontWeight: '600' }}>
-                AI Search Engineers • Daily Summary • {formatDateDisplay(selectedDate)}
-              </p>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{
+                  opacity: 0.045,
+                  transform: 'rotate(-28deg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  userSelect: 'none',
+                  margin: '40px 0'
+                }}>
+                  <img src={logo} alt="" style={{ width: '280px', height: 'auto', marginBottom: '8px' }} />
+                  <div style={{ fontSize: '28px', fontWeight: '900', letterSpacing: '6px', color: '#0f172a', textTransform: 'uppercase' }}>
+                    AI SEARCH ENGINEERS
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {/* Content Container (Above watermark) */}
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              {/* 1. Header Card */}
+              <div style={{
+                background: '#0d1627',
+                borderRadius: '12px',
+                padding: '24px 30px',
+                color: '#ffffff',
+                marginBottom: '24px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', letterSpacing: '-0.5px' }}>
+                    Cold Calling Report
+                  </h1>
+                  <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#38bdf8', fontWeight: '600' }}>
+                    AI Search Engineers • Daily Summary • {formatDateDisplay(selectedDate)}
+                  </p>
+                </div>
+                <img src={logo} alt="AISE Logo" style={{ height: '36px', objectFit: 'contain' }} />
+              </div>
 
             {/* 2. KPI Cards Row */}
             <div style={{
@@ -551,22 +597,23 @@ export default function DailyReport() {
               </table>
             </div>
 
-            {/* 8. Footer */}
-            <div style={{
-              borderTop: '1px solid #e2e8f0',
-              paddingTop: '16px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '11px',
-              color: '#94a3b8',
-              lineHeight: '1.4'
-            }}>
-              <div style={{ maxWidth: '600px' }}>
-                This report was compiled from the "Call Logs" and "Summaries" tabs of the dashboard (cold-call-agent.netlify.app), filtered to entries dated {formatFooterDate(selectedDate)}.
-              </div>
-              <div style={{ fontWeight: '600' }}>
-                Page 1 of 1
+              {/* 8. Footer */}
+              <div style={{
+                borderTop: '1px solid #e2e8f0',
+                paddingTop: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '11px',
+                color: '#94a3b8',
+                lineHeight: '1.4'
+              }}>
+                <div style={{ maxWidth: '600px' }}>
+                  This report was compiled from the "Call Logs" and "Summaries" tabs of the dashboard (cold-call-agent.netlify.app), filtered to entries dated {formatFooterDate(selectedDate)}.
+                </div>
+                <div style={{ fontWeight: '600' }}>
+                  Page 1 of 1
+                </div>
               </div>
             </div>
           </div>
