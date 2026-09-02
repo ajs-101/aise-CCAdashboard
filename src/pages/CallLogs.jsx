@@ -11,7 +11,9 @@ import {
   Phone,
   DollarSign,
   Calendar,
-  Sparkles
+  Sparkles,
+  Copy,
+  Check
 } from "lucide-react";
 import supabase from "../supabase";
 
@@ -33,6 +35,7 @@ export default function CallLogs() {
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchCalls();
@@ -45,6 +48,14 @@ export default function CallLogs() {
       .order("created_at", { ascending: false });
     setCalls(data || []);
     setLoading(false);
+  };
+
+  const handleCopyTranscript = () => {
+    if (!selected?.transcript) return;
+    navigator.clipboard.writeText(selected.transcript).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const getOutcomeBadgeClass = (outcome) => {
@@ -85,7 +96,7 @@ export default function CallLogs() {
   return (
     <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
       {/* Left Main Content Table */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "20px" }}>
         {/* Search & Filter Toolbar */}
         <div
           className="glass-card"
@@ -241,13 +252,20 @@ export default function CallLogs() {
         <div
           className="glass-card animate-fade-in"
           style={{
-            width: "360px",
+            width: "400px",
+            minWidth: "400px",
             padding: "24px",
             position: "sticky",
-            top: "92px"
+            top: "92px",
+            maxHeight: "calc(100vh - 110px)",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px"
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <PhoneCall size={18} style={{ color: "var(--accent)" }} />
               <h3 style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: "700", color: "#ffffff" }}>
@@ -268,37 +286,41 @@ export default function CallLogs() {
             </button>
           </div>
 
-          {[
-            { label: "Lead Name", value: selected.customer_name || "—", icon: User },
-            { label: "Phone Number", value: selected.customer_phone, icon: Phone },
-            { label: "Duration", value: formatDuration(selected.duration_seconds), icon: Clock },
-            { label: "Outcome", value: selected.outcome || "unknown", icon: Sparkles },
-            { label: "Cost", value: selected.cost ? `$${selected.cost}` : "$0", icon: DollarSign },
-            { label: "Date Logged", value: selected.created_at ? new Date(selected.created_at).toLocaleString() : "—", icon: Calendar },
-          ].map(({ label, value, icon: Icon }) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "10px 0",
-                borderBottom: "1px solid var(--border)",
-                fontSize: "13px"
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)" }}>
-                <Icon size={14} style={{ color: "var(--text-muted)" }} />
-                <span>{label}</span>
+          {/* Details List */}
+          <div>
+            {[
+              { label: "Lead Name", value: selected.customer_name || "—", icon: User },
+              { label: "Phone Number", value: selected.customer_phone, icon: Phone },
+              { label: "Duration", value: formatDuration(selected.duration_seconds), icon: Clock },
+              { label: "Outcome", value: selected.outcome || "unknown", icon: Sparkles },
+              { label: "Cost", value: selected.cost ? `$${selected.cost}` : "$0", icon: DollarSign },
+              { label: "Date Logged", value: selected.created_at ? new Date(selected.created_at).toLocaleString() : "—", icon: Calendar },
+            ].map(({ label, value, icon: Icon }) => (
+              <div
+                key={label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "9px 0",
+                  borderBottom: "1px solid var(--border)",
+                  fontSize: "13px"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)" }}>
+                  <Icon size={14} style={{ color: "var(--text-muted)" }} />
+                  <span>{label}</span>
+                </div>
+                <span style={{ fontWeight: "600", color: "#ffffff", textAlign: "right" }}>
+                  {value}
+                </span>
               </div>
-              <span style={{ fontWeight: "600", color: "#ffffff", textAlign: "right" }}>
-                {value}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
 
+          {/* AI Summary */}
           {selected.summary && (
-            <div style={{ marginTop: "20px" }}>
+            <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
                 <FileText size={14} style={{ color: "var(--accent)" }} />
                 <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -319,8 +341,9 @@ export default function CallLogs() {
             </div>
           )}
 
+          {/* Audio Player */}
           {(selected.recording_url || selected.call_id) && (
-            <div style={{ marginTop: "20px" }}>
+            <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
                 <Volume2 size={14} style={{ color: "var(--accent-green)" }} />
                 <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -335,22 +358,45 @@ export default function CallLogs() {
             </div>
           )}
 
+          {/* Transcript Section */}
           {selected.transcript && (
-            <div style={{ marginTop: "20px" }}>
-              <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
-                Transcript
-              </span>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Transcript
+                </span>
+                <button
+                  onClick={handleCopyTranscript}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    background: "rgba(0, 212, 255, 0.1)",
+                    border: "1px solid rgba(0, 212, 255, 0.25)",
+                    borderRadius: "6px",
+                    color: "var(--accent)",
+                    fontSize: "11px",
+                    padding: "3px 8px",
+                    cursor: "pointer"
+                  }}
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  <span>{copied ? "Copied!" : "Copy"}</span>
+                </button>
+              </div>
               <div
                 style={{
-                  maxHeight: "180px",
-                  overflowY: "auto",
                   fontSize: "12px",
                   color: "var(--text-secondary)",
                   lineHeight: "1.7",
                   background: "var(--bg-input)",
                   border: "1px solid var(--border)",
-                  padding: "12px",
-                  borderRadius: "10px"
+                  padding: "14px",
+                  borderRadius: "10px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  maxHeight: "280px",
+                  overflowY: "auto"
                 }}
               >
                 {selected.transcript}

@@ -187,19 +187,6 @@ export default function Layout({ onLogout }) {
         >
           {/* Breadcrumb & Title */}
           <div>
-            <div
-              style={{
-                fontSize: "12px",
-                color: "var(--text-muted)",
-                fontWeight: "500",
-                marginBottom: "2px",
-              }}
-            >
-              AISE Console /{" "}
-              <span style={{ color: "var(--accent)" }}>
-                {getPageTitle(location.pathname)}
-              </span>
-            </div>
             <h2
               style={{
                 fontSize: "18px",
@@ -214,34 +201,6 @@ export default function Layout({ onLogout }) {
 
           {/* Right Header Status & Controls */}
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            {/* System Status Pill */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.25)",
-                borderRadius: "9999px",
-                padding: "6px 14px",
-                fontSize: "12px",
-                fontWeight: "600",
-                color: "var(--accent-green)",
-              }}
-            >
-              <div
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  background: "var(--accent-green)",
-                  boxShadow: "0 0 10px var(--accent-green)",
-                  animation: "pulseGlow 2s infinite ease-in-out",
-                }}
-              />
-              <span>AI Telephony Online</span>
-            </div>
-
             {/* Global Quick Action Button */}
             <button
               onClick={() => navigate("/campaigns")}
