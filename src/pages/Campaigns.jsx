@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import axios from "axios";
 
 const API_URL =
@@ -7,9 +7,11 @@ const API_URL =
 export default function Campaigns() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const [delaySeconds, setDelaySeconds] = useState(5);
   const [respectHours, setRespectHours] = useState(true);
@@ -24,6 +26,7 @@ export default function Campaigns() {
   const [testResult, setTestResult] = useState("");
 
   const handleTestCall = async () => {
+    if (testCalling) return;
     if (!testPhone) return setTestResult("Phone number is required");
     if (!testPhone.startsWith("+"))
       return setTestResult("Phone must start with + and country code");
@@ -58,6 +61,7 @@ export default function Campaigns() {
     if (selected && selected.name.endsWith(".csv")) {
       setFile(selected);
       setError("");
+      setResults(null);
     } else {
       setError("Please upload a CSV file only");
     }
@@ -70,20 +74,25 @@ export default function Campaigns() {
     if (dropped && dropped.name.endsWith(".csv")) {
       setFile(dropped);
       setError("");
+      setResults(null);
     } else {
       setError("Please upload a CSV file only");
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
+  const startCampaignConfirmed = async () => {
+    if (!file || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setShowConfirmModal(false);
     setUploading(true);
     setResults(null);
     setError("");
+
     const formData = new FormData();
     formData.append("file", file);
     formData.append("delaySeconds", delaySeconds);
     formData.append("respectHours", respectHours);
+
     try {
       const res = await axios.post(API_URL + "/api/upload-csv", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -92,11 +101,34 @@ export default function Campaigns() {
         setError(res.data.error || "Campaign failed");
       } else {
         setResults(res.data);
+        // Clear file from state to prevent accidental repeat clicks
+        setFile(null);
+        const fileInput = document.getElementById("csv-input");
+        if (fileInput) fileInput.value = "";
       }
     } catch (err) {
-      setError("Failed to upload. Make sure the backend is running.");
+      setError(
+        err.response?.data?.error ||
+          "Failed to upload. Make sure the backend is running.",
+      );
+    } finally {
+      setUploading(false);
+      isSubmittingRef.current = false;
     }
-    setUploading(false);
+  };
+
+  const handleUploadClick = () => {
+    if (!file || uploading || isSubmittingRef.current) return;
+    setError("");
+    setShowConfirmModal(true);
+  };
+
+  const resetAll = () => {
+    setFile(null);
+    setResults(null);
+    setError("");
+    const fileInput = document.getElementById("csv-input");
+    if (fileInput) fileInput.value = "";
   };
 
   var getStatusColor = function (status) {
@@ -515,26 +547,66 @@ export default function Campaigns() {
         </div>
       ) : null}
 
-      <button
-        onClick={handleUpload}
-        disabled={!file || uploading}
-        style={{
-          padding: "14px 32px",
-          background:
-            !file || uploading ? "var(--accent-dim)" : "var(--accent)",
-          border: "none",
-          borderRadius: "10px",
-          color: !file || uploading ? "var(--accent)" : "#070b14",
-          fontSize: "14px",
-          fontWeight: "700",
-          fontFamily: "var(--font-display)",
-          cursor: !file || uploading ? "not-allowed" : "pointer",
-          marginBottom: "32px",
-          transition: "all 0.2s",
-        }}
-      >
-        {uploading ? "Queuing campaign..." : "Start Campaign"}
-      </button>
+      <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "32px" }}>
+        <button
+          onClick={handleUploadClick}
+          disabled={!file || uploading}
+          style={{
+            padding: "14px 32px",
+            background:
+              !file || uploading ? "var(--accent-dim)" : "var(--accent)",
+            border: "none",
+            borderRadius: "10px",
+            color: !file || uploading ? "var(--accent)" : "#070b14",
+            fontSize: "14px",
+            fontWeight: "700",
+            fontFamily: "var(--font-display)",
+            cursor: !file || uploading ? "not-allowed" : "pointer",
+            transition: "all 0.2s",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          {uploading ? (
+            <>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "14px",
+                  height: "14px",
+                  border: "2px solid currentColor",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              Queuing campaign...
+            </>
+          ) : (
+            "🚀 Start Campaign"
+          )}
+        </button>
+
+        {results ? (
+          <button
+            onClick={resetAll}
+            style={{
+              padding: "14px 24px",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: "10px",
+              color: "var(--text-primary)",
+              fontSize: "14px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            ➕ Start New Campaign
+          </button>
+        ) : null}
+      </div>
 
       {results ? (
         <div
@@ -678,6 +750,191 @@ export default function Campaigns() {
           ) : null}
         </div>
       ) : null}
+
+      {/* Confirmation Modal to Prevent Double-Calling */}
+      {showConfirmModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              background: "#0d131f",
+              border: "1px solid var(--border)",
+              borderRadius: "20px",
+              padding: "28px",
+              maxWidth: "460px",
+              width: "100%",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "16px",
+              }}
+            >
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "12px",
+                  background: "rgba(0, 230, 153, 0.15)",
+                  color: "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "20px",
+                }}
+              >
+                📞
+              </div>
+              <div>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "18px",
+                    fontWeight: "800",
+                    color: "#fff",
+                    margin: 0,
+                  }}
+                >
+                  Start Outbound Campaign?
+                </h3>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                    margin: 0,
+                  }}
+                >
+                  Please confirm before dispatching live calls
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "var(--bg-secondary)",
+                borderRadius: "12px",
+                padding: "16px",
+                marginBottom: "20px",
+                fontSize: "13px",
+                lineHeight: "1.6",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ color: "var(--text-secondary)" }}>File:</span>
+                <span
+                  style={{
+                    fontWeight: "600",
+                    color: "var(--text-primary)",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {file?.name}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ color: "var(--text-secondary)" }}>
+                  Call Delay:
+                </span>
+                <span
+                  style={{ fontWeight: "600", color: "var(--accent-green)" }}
+                >
+                  {delaySeconds} seconds between calls
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ color: "var(--text-secondary)" }}>
+                  US Hours Check:
+                </span>
+                <span
+                  style={{
+                    fontWeight: "600",
+                    color: respectHours
+                      ? "var(--accent)"
+                      : "var(--accent-yellow)",
+                  }}
+                >
+                  {respectHours ? "Enforced (9am-5pm EST)" : "Disabled (Call anytime)"}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                disabled={uploading}
+                style={{
+                  padding: "10px 18px",
+                  background: "transparent",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  color: "var(--text-secondary)",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={startCampaignConfirmed}
+                disabled={uploading}
+                style={{
+                  padding: "10px 22px",
+                  background: "var(--accent)",
+                  border: "none",
+                  borderRadius: "10px",
+                  color: "#070b14",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  fontFamily: "var(--font-display)",
+                  cursor: "pointer",
+                }}
+              >
+                Yes, Start Campaign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
