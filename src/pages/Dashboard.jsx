@@ -128,26 +128,18 @@ export default function Dashboard() {
       .select("*")
       .order("created_at", { ascending: false });
 
+    const leadsResult = await supabase.from("leads").select("id, status");
+    const bookingsResult = await supabase.from("bookings").select("id");
+    const repliesResult = await supabase.from("messages").select("id").eq("direction", "inbound");
     const dncResult = await supabase.from("do_not_call").select("id");
 
     const calls = callsResult.data || [];
+    const leads = leadsResult.data || [];
+    const bookings = bookingsResult.data || [];
+    const replies = repliesResult.data || [];
     const dnc = dncResult.data || [];
 
     const completed = calls.filter((c) => (c.duration_seconds || 0) > 0);
-
-    const booked = calls.filter((c) => {
-      const outcome = (c.outcome || "").toLowerCase();
-      const summary = (c.summary || "").toLowerCase();
-      if (outcome.includes("voicemail")) return false;
-      if (outcome.includes("error") || outcome.includes("failed")) return false;
-      return (
-        (summary.includes("book") ||
-          summary.includes("scheduled") ||
-          summary.includes("appointment")) &&
-        (outcome.includes("customer-ended") ||
-          outcome.includes("assistant-ended"))
-      );
-    });
 
     const voicemails = calls.filter((c) =>
       (c.outcome || "").toLowerCase().includes("voicemail")
@@ -166,10 +158,14 @@ export default function Dashboard() {
           )
         : 0;
 
+    const bookedCount = bookings.length > 0 ? bookings.length : leads.filter((l) => l.status === "BOOKED").length;
+
     setStats({
+      totalLeads: leads.length,
       totalCalls: calls.length,
       completedCalls: completed.length,
-      bookedCalls: booked.length,
+      bookedCalls: bookedCount,
+      inboundReplies: replies.length,
       voicemailCalls: voicemails.length,
       dncCount: dnc.length,
       totalCost: totalCost.toFixed(2),
@@ -200,9 +196,9 @@ export default function Dashboard() {
     setChartData(Object.values(daysMap));
 
     // Prepare pie data
-    const answeredCount = completed.length - booked.length;
+    const answeredCount = Math.max(0, completed.length - bookedCount);
     setPieData([
-      { name: "Meetings Booked", value: booked.length || 1, color: "var(--accent-purple)" },
+      { name: "Meetings Booked", value: bookedCount || 1, color: "var(--accent-purple)" },
       { name: "Live Conversations", value: Math.max(0, answeredCount) || 1, color: "var(--accent-green)" },
       { name: "Voicemail Left", value: voicemails.length || 1, color: "var(--accent-yellow)" },
       { name: "Unanswered / Failed", value: Math.max(0, calls.length - completed.length - voicemails.length) || 1, color: "var(--accent-red)" }

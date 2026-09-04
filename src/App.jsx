@@ -7,6 +7,7 @@ import CallLogs from './pages/CallLogs'
 import DoNotCall from './pages/DoNotCall'
 import Meetings from './pages/Meetings'
 import Layout from './components/Layout'
+import LeadsBoard from './pages/LeadsBoard'
 import Summaries from './pages/Summaries'
 import Messages from './pages/Messages'
 import VoicemailRetries from './pages/VoicemailRetries'
@@ -41,6 +42,7 @@ export default function App() {
           isAuthenticated ? <Layout onLogout={logout} /> : <Navigate to="/login" />
         }>
           <Route index element={<Dashboard />} />
+          <Route path="leads" element={<LeadsBoard />} />
           <Route path="campaigns" element={<Campaigns />} />
           <Route path="calls" element={<CallLogs />} />
           <Route path="meetings" element={<Meetings />} />

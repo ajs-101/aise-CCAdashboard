@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
+  Users,
   Megaphone,
   PhoneCall,
   MailCheck,
@@ -27,6 +28,7 @@ export default function Layout({ onLogout }) {
 
   const navItems = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/leads", label: "Live Leads", icon: Users },
     { to: "/campaigns", label: "Campaigns", icon: Megaphone },
     { to: "/calls", label: "Call Logs", icon: PhoneCall },
     { to: "/retries", label: "Voicemail & Retries", icon: MailCheck },
