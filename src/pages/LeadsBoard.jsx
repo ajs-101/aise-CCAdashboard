@@ -115,6 +115,8 @@ export default function LeadsBoard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: lead.id,
+          leadId: lead.id,
           phone: lead.phone_e164,
           firstName: lead.first_name,
           lastName: lead.last_name,
