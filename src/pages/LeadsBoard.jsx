@@ -21,12 +21,10 @@ import {
   Layers,
 } from "lucide-react";
 
-const API_URL = import.meta.env.DEV
-  ? "http://localhost:3000"
-  : import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
 
 export default function LeadsBoard() {
-  const [leads, setLeads] = useState([]);
+  const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,26 +39,45 @@ export default function LeadsBoard() {
   const fetchLeads = async () => {
     setLoading(true);
     try {
-      let query = supabase
+      const query = supabase
         .from("leads")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(250);
 
-      if (filterStatus !== "ALL") {
-        query = query.eq("status", filterStatus);
-      }
-
       const { data, error } = await query;
       if (error) {
         console.warn("⚠️ [LeadsBoard] Supabase query error:", error.message);
-        setLeads([]);
+        setAllLeads([]);
       } else {
-        setLeads(data || []);
+        const rawLeads = data || [];
+
+        // Auto-correct any dialed leads that are still marked as READY
+        const needsCorrection = rawLeads.filter(
+          (l) => (l.attempt_count > 0 || l.last_called_at) && l.status === "READY"
+        );
+
+        if (needsCorrection.length > 0) {
+          for (const l of needsCorrection) {
+            const newStage = Math.max(l.follow_up_stage || 1, 1);
+            l.status = "FOLLOW_UP";
+            l.follow_up_stage = newStage;
+            await supabase
+              .from("leads")
+              .update({
+                status: "FOLLOW_UP",
+                follow_up_stage: newStage,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", l.id);
+          }
+        }
+
+        setAllLeads(rawLeads);
       }
     } catch (err) {
       console.error("❌ [LeadsBoard] Error:", err.message);
-      setLeads([]);
+      setAllLeads([]);
     } finally {
       setLoading(false);
     }
@@ -68,7 +85,7 @@ export default function LeadsBoard() {
 
   useEffect(() => {
     fetchLeads();
-  }, [filterStatus]);
+  }, []);
 
   // Local window status helper
   const getWindowStatus = (timezone) => {
@@ -147,16 +164,12 @@ export default function LeadsBoard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          leadId: smsModalLead.id,
-          phone: smsModalLead.phone_e164,
-          body: smsBody,
-          firstName: smsModalLead.first_name,
-          firmName: smsModalLead.firm_name,
-          practiceArea: smsModalLead.practice_area,
+          to: smsModalLead.phone_e164,
+          message: smsBody,
         }),
       });
       const data = await res.json();
-      if (data.success || data.status === "sent") {
+      if (data.success) {
         setSmsSuccess(true);
         setTimeout(() => {
           setSmsModalLead(null);
@@ -195,8 +208,10 @@ export default function LeadsBoard() {
     }
   };
 
-  const filteredLeads = leads.filter((l) => {
+  const filteredLeads = allLeads.filter((l) => {
+    if (filterStatus !== "ALL" && l.status !== filterStatus) return false;
     const term = searchTerm.toLowerCase();
+    if (!term) return true;
     return (
       (l.first_name || "").toLowerCase().includes(term) ||
       (l.last_name || "").toLowerCase().includes(term) ||
@@ -209,14 +224,14 @@ export default function LeadsBoard() {
 
   // Calculate Stat Pill Counts
   const counts = {
-    total: leads.length,
-    ready: leads.filter((l) => l.status === "READY").length,
-    inSequence: leads.filter((l) => l.status === "FOLLOW_UP").length,
-    interested: leads.filter((l) => l.status === "INTERESTED").length,
-    booked: leads.filter((l) => l.status === "BOOKED").length,
-    replied: leads.filter((l) => l.status === "REPLIED").length,
-    callback: leads.filter((l) => l.status === "CALLBACK_REQUESTED").length,
-    dnc: leads.filter((l) => l.status === "DO_NOT_CONTACT").length,
+    total: allLeads.length,
+    ready: allLeads.filter((l) => l.status === "READY").length,
+    inSequence: allLeads.filter((l) => l.status === "FOLLOW_UP").length,
+    interested: allLeads.filter((l) => l.status === "INTERESTED").length,
+    booked: allLeads.filter((l) => l.status === "BOOKED").length,
+    replied: allLeads.filter((l) => l.status === "REPLIED").length,
+    callback: allLeads.filter((l) => l.status === "CALLBACK_REQUESTED").length,
+    dnc: allLeads.filter((l) => l.status === "DO_NOT_CONTACT").length,
   };
 
   const getStatusBadge = (status) => {
