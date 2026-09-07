@@ -23,7 +23,8 @@ import {
   CheckSquare,
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
 
 export default function LeadsBoard() {
   const [allLeads, setAllLeads] = useState([]);
@@ -37,7 +38,11 @@ export default function LeadsBoard() {
 
   // Batch Calling State
   const [batchCalling, setBatchCalling] = useState(false);
-  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentName: "" });
+  const [batchProgress, setBatchProgress] = useState({
+    current: 0,
+    total: 0,
+    currentName: "",
+  });
   const stopBatchRef = useRef(false);
 
   // Quick SMS Modal State
@@ -89,7 +94,10 @@ export default function LeadsBoard() {
   };
 
   const toggleSelectAll = (filteredList) => {
-    if (filteredList.length > 0 && selectedLeadIds.size === filteredList.length) {
+    if (
+      filteredList.length > 0 &&
+      selectedLeadIds.size === filteredList.length
+    ) {
       setSelectedLeadIds(new Set());
     } else {
       setSelectedLeadIds(new Set(filteredList.map((l) => l.id)));
@@ -110,7 +118,7 @@ export default function LeadsBoard() {
         body: JSON.stringify({
           id: lead.id,
           leadId: lead.id,
-          phone: lead.phone_e164,
+          phone: lead.phone_e164 || lead.phone,
           firstName: lead.first_name,
           lastName: lead.last_name,
           firmName: lead.firm_name,
@@ -120,10 +128,27 @@ export default function LeadsBoard() {
       });
       const data = await res.json();
       if (data.success || data.id) {
-        alert(`📞 Call initiated for ${lead.first_name || lead.phone_e164}!`);
+        alert(
+          `📞 Call initiated for ${lead.first_name || lead.phone_e164 || lead.phone}!`,
+        );
+        // Optimistically update attempt count and last_called_at in local state immediately
+        setAllLeads((prev) =>
+          prev.map((l) =>
+            l.id === lead.id
+              ? {
+                  ...l,
+                  attempt_count: (l.attempt_count || 0) + 1,
+                  status: "CALLING",
+                  last_called_at: new Date().toISOString(),
+                }
+              : l,
+          ),
+        );
         fetchLeads();
       } else {
-        alert(`❌ Call failed: ${data.error || "Check backend / Vapi credentials"}`);
+        alert(
+          `❌ Call failed: ${data.error || "Check backend / Vapi credentials"}`,
+        );
       }
     } catch (err) {
       alert(`❌ Error dispatching call: ${err.message}`);
@@ -138,11 +163,20 @@ export default function LeadsBoard() {
       alert("No leads selected to call.");
       return;
     }
-    if (!confirm(`Start calling ${leadsToCall.length} selected lead(s) one-by-one?`)) return;
+    if (
+      !confirm(
+        `Start calling ${leadsToCall.length} selected lead(s) one-by-one?`,
+      )
+    )
+      return;
 
     setBatchCalling(true);
     stopBatchRef.current = false;
-    setBatchProgress({ current: 0, total: leadsToCall.length, currentName: "" });
+    setBatchProgress({
+      current: 0,
+      total: leadsToCall.length,
+      currentName: "",
+    });
 
     for (let i = 0; i < leadsToCall.length; i++) {
       if (stopBatchRef.current) {
@@ -154,7 +188,7 @@ export default function LeadsBoard() {
       setBatchProgress({
         current: i + 1,
         total: leadsToCall.length,
-        currentName: `${lead.first_name || ""} ${lead.last_name || ""} (${lead.phone_e164})`,
+        currentName: `${lead.first_name || ""} ${lead.last_name || ""} (${lead.phone_e164 || lead.phone})`,
       });
 
       try {
@@ -164,7 +198,7 @@ export default function LeadsBoard() {
           body: JSON.stringify({
             id: lead.id,
             leadId: lead.id,
-            phone: lead.phone_e164,
+            phone: lead.phone_e164 || lead.phone,
             firstName: lead.first_name,
             lastName: lead.last_name,
             firmName: lead.firm_name,
@@ -200,12 +234,18 @@ export default function LeadsBoard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: smsModalLead.phone_e164,
+          phone: smsModalLead.phone_e164 || smsModalLead.phone,
+          to: smsModalLead.phone_e164 || smsModalLead.phone,
+          body: smsBody,
           message: smsBody,
+          firstName: smsModalLead.first_name,
+          firmName: smsModalLead.firm_name,
+          practiceArea: smsModalLead.practice_area,
+          leadId: smsModalLead.id,
         }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success || data.status === "sent") {
         setSmsSuccess(true);
         setTimeout(() => {
           setSmsModalLead(null);
@@ -224,15 +264,24 @@ export default function LeadsBoard() {
 
   // DNC Handler
   const handleMarkDnc = async (lead) => {
-    if (!confirm(`Add ${lead.phone_e164} (${lead.first_name}) to Do Not Call?`)) return;
+    if (!confirm(`Add ${lead.phone_e164} (${lead.first_name}) to Do Not Call?`))
+      return;
     try {
-      await supabase.from("do_not_call").upsert(
-        { phone: lead.phone_e164, reason: "Manual DNC mark from Leads Board" },
-        { onConflict: "phone" }
-      );
+      await supabase
+        .from("do_not_call")
+        .upsert(
+          {
+            phone: lead.phone_e164,
+            reason: "Manual DNC mark from Leads Board",
+          },
+          { onConflict: "phone" },
+        );
       await supabase
         .from("leads")
-        .update({ status: "DO_NOT_CONTACT", updated_at: new Date().toISOString() })
+        .update({
+          status: "DO_NOT_CONTACT",
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", lead.id);
       fetchLeads();
     } catch (err) {
@@ -257,20 +306,27 @@ export default function LeadsBoard() {
   // Categorize leads into 4 Clean Tabs
   const needCallingLeads = allLeads.filter(
     (l) =>
-      !["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER", "BOOKED"].includes(l.status) &&
-      (l.status === "READY" || l.status === "NEW" || l.status === "FOLLOW_UP" || (l.attempt_count || 0) < 5)
+      !["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER", "BOOKED"].includes(
+        l.status,
+      ) &&
+      (l.status === "READY" ||
+        l.status === "NEW" ||
+        l.status === "FOLLOW_UP" ||
+        (l.attempt_count || 0) < 5),
   );
 
   const alreadyCalledLeads = allLeads.filter(
-    (l) => (l.attempt_count || 0) > 0 && l.status !== "DO_NOT_CONTACT"
+    (l) => (l.attempt_count || 0) > 0 && l.status !== "DO_NOT_CONTACT",
   );
 
   const hotLeads = allLeads.filter((l) =>
-    ["INTERESTED", "BOOKED", "CALLBACK_REQUESTED", "REPLIED"].includes(l.status)
+    ["INTERESTED", "BOOKED", "CALLBACK_REQUESTED", "REPLIED"].includes(
+      l.status,
+    ),
   );
 
   const dncLeads = allLeads.filter((l) =>
-    ["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER"].includes(l.status)
+    ["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER"].includes(l.status),
   );
 
   // Active Tab list
@@ -289,20 +345,27 @@ export default function LeadsBoard() {
       (l.firm_name || "").toLowerCase().includes(term) ||
       (l.phone_e164 || "").includes(term) ||
       (l.city || "").toLowerCase().includes(term) ||
-      (l.practice_area_spoken || l.practice_area || "").toLowerCase().includes(term)
+      (l.practice_area_spoken || l.practice_area || "")
+        .toLowerCase()
+        .includes(term)
     );
   });
 
-  const isAllSelected = filteredList.length > 0 && selectedLeadIds.size === filteredList.length;
+  const isAllSelected =
+    filteredList.length > 0 && selectedLeadIds.size === filteredList.length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }} className="animate-fade-in">
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: "20px" }}
+      className="animate-fade-in"
+    >
       {/* Batch Calling In-Progress Notification */}
       {batchCalling && (
         <div
           className="glass-card"
           style={{
-            background: "linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)",
+            background:
+              "linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)",
             border: "1px solid #00d4ff",
             padding: "16px 20px",
             borderRadius: "14px",
@@ -314,13 +377,24 @@ export default function LeadsBoard() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <PhoneCall size={24} style={{ color: "#00d4ff", animation: "bounce 1s infinite" }} />
+            <PhoneCall
+              size={24}
+              style={{ color: "#00d4ff", animation: "bounce 1s infinite" }}
+            />
             <div>
-              <div style={{ fontSize: "15px", fontWeight: "800", color: "#ffffff" }}>
-                ⚡ Calling in Progress: {batchProgress.current} of {batchProgress.total}
+              <div
+                style={{
+                  fontSize: "15px",
+                  fontWeight: "800",
+                  color: "#ffffff",
+                }}
+              >
+                ⚡ Calling in Progress: {batchProgress.current} of{" "}
+                {batchProgress.total}
               </div>
               <div style={{ fontSize: "12px", color: "#93c5fd" }}>
-                Calling now: <strong>{batchProgress.currentName}</strong> (4s delay between calls)
+                Calling now: <strong>{batchProgress.currentName}</strong> (4s
+                delay between calls)
               </div>
             </div>
           </div>
@@ -363,7 +437,7 @@ export default function LeadsBoard() {
           {[
             {
               id: "need_calling",
-              label: "📞 Need Calling (Aaj Ki Leads)",
+              label: "📞 Need Calling",
               count: needCallingLeads.length,
               color: "#00d4ff",
             },
@@ -397,8 +471,12 @@ export default function LeadsBoard() {
                   fontSize: "13px",
                   fontWeight: isActive ? "800" : "600",
                   cursor: "pointer",
-                  border: isActive ? `1px solid ${tab.color}60` : "1px solid rgba(255, 255, 255, 0.08)",
-                  background: isActive ? `${tab.color}20` : "rgba(15, 23, 42, 0.7)",
+                  border: isActive
+                    ? `1px solid ${tab.color}60`
+                    : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: isActive
+                    ? `${tab.color}20`
+                    : "rgba(15, 23, 42, 0.7)",
                   color: isActive ? "#ffffff" : "var(--text-secondary)",
                   boxShadow: isActive ? `0 4px 18px ${tab.color}35` : "none",
                   transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -413,7 +491,9 @@ export default function LeadsBoard() {
                     fontSize: "11px",
                     padding: "2px 8px",
                     borderRadius: "20px",
-                    background: isActive ? tab.color : "rgba(255, 255, 255, 0.1)",
+                    background: isActive
+                      ? tab.color
+                      : "rgba(255, 255, 255, 0.1)",
                     color: isActive ? "#040914" : "var(--text-primary)",
                     fontWeight: "800",
                   }}
@@ -426,13 +506,22 @@ export default function LeadsBoard() {
         </div>
 
         {/* Action Buttons & Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
           {/* Dynamic Call Selected vs Call All Button */}
           {selectedLeadIds.size > 0 ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button
                 onClick={() => {
-                  const selectedLeads = filteredList.filter((l) => selectedLeadIds.has(l.id));
+                  const selectedLeads = filteredList.filter((l) =>
+                    selectedLeadIds.has(l.id),
+                  );
                   handleStartBatchCalling(selectedLeads);
                 }}
                 disabled={batchCalling}
@@ -440,7 +529,8 @@ export default function LeadsBoard() {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
                   color: "#040914",
                   border: "none",
                   borderRadius: "10px",
@@ -480,7 +570,8 @@ export default function LeadsBoard() {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
                   color: "#040914",
                   border: "none",
                   borderRadius: "10px",
@@ -501,7 +592,13 @@ export default function LeadsBoard() {
           <div style={{ position: "relative", minWidth: "220px" }}>
             <Search
               size={14}
-              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted)",
+              }}
             />
             <input
               type="text"
@@ -538,20 +635,44 @@ export default function LeadsBoard() {
               fontWeight: "600",
             }}
           >
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} style={{ color: "#00d4ff" }} />
+            <RefreshCw
+              size={13}
+              className={loading ? "animate-spin" : ""}
+              style={{ color: "#00d4ff" }}
+            />
             Refresh
           </button>
         </div>
       </div>
 
       {/* Leads Table */}
-      <div className="glass-card" style={{ padding: "0", overflow: "hidden", borderRadius: "14px" }}>
+      <div
+        className="glass-card"
+        style={{ padding: "0", overflow: "hidden", borderRadius: "14px" }}
+      >
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              textAlign: "left",
+            }}
+          >
             <thead>
-              <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid var(--border)" }}>
+              <tr
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
                 {/* Select All Checkbox */}
-                <th style={{ width: "46px", padding: "14px 16px", textAlign: "center" }}>
+                <th
+                  style={{
+                    width: "46px",
+                    padding: "14px 16px",
+                    textAlign: "center",
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={isAllSelected}
@@ -565,19 +686,60 @@ export default function LeadsBoard() {
                     title={isAllSelected ? "Deselect All" : "Select All"}
                   />
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                <th
+                  style={{
+                    padding: "14px 20px",
+                    color: "var(--text-muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Lead Name & Contact
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                <th
+                  style={{
+                    padding: "14px 20px",
+                    color: "var(--text-muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Firm & Specialty
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                <th
+                  style={{
+                    padding: "14px 20px",
+                    color: "var(--text-muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Call Attempts
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                <th
+                  style={{
+                    padding: "14px 20px",
+                    color: "var(--text-muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Last Activity
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", textAlign: "right" }}>
+                <th
+                  style={{
+                    padding: "14px 20px",
+                    color: "var(--text-muted)",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    textAlign: "right",
+                  }}
+                >
                   Actions
                 </th>
               </tr>
@@ -585,17 +747,56 @@ export default function LeadsBoard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
-                    <RefreshCw size={26} className="animate-spin" style={{ margin: "0 auto 10px", color: "#00d4ff" }} />
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>Loading leads data...</div>
+                  <td
+                    colSpan={6}
+                    style={{
+                      padding: "50px",
+                      textAlign: "center",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <RefreshCw
+                      size={26}
+                      className="animate-spin"
+                      style={{ margin: "0 auto 10px", color: "#00d4ff" }}
+                    />
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#ffffff",
+                      }}
+                    >
+                      Loading leads data...
+                    </div>
                   </td>
                 </tr>
               ) : filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
-                    <Users size={32} style={{ margin: "0 auto 10px", opacity: 0.4 }} />
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>No leads in this tab</div>
-                    <div style={{ fontSize: "12px", marginTop: "4px" }}>Search filter reset karein ya leads upload karein.</div>
+                  <td
+                    colSpan={6}
+                    style={{
+                      padding: "50px",
+                      textAlign: "center",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <Users
+                      size={32}
+                      style={{ margin: "0 auto 10px", opacity: 0.4 }}
+                    />
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#ffffff",
+                      }}
+                    >
+                      No leads in this tab
+                    </div>
+                    <div style={{ fontSize: "12px", marginTop: "4px" }}>
+                      Search filter reset karein ya leads upload karein.
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -608,18 +809,29 @@ export default function LeadsBoard() {
                       key={lead.id}
                       style={{
                         borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
-                        background: isSelected ? "rgba(0, 212, 255, 0.05)" : "transparent",
+                        background: isSelected
+                          ? "rgba(0, 212, 255, 0.05)"
+                          : "transparent",
                         transition: "background 0.2s",
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
+                        if (!isSelected)
+                          e.currentTarget.style.background =
+                            "rgba(255, 255, 255, 0.02)";
                       }}
                       onMouseLeave={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = "transparent";
+                        if (!isSelected)
+                          e.currentTarget.style.background = "transparent";
                       }}
                     >
                       {/* Row Checkbox */}
-                      <td style={{ width: "46px", padding: "14px 16px", textAlign: "center" }}>
+                      <td
+                        style={{
+                          width: "46px",
+                          padding: "14px 16px",
+                          textAlign: "center",
+                        }}
+                      >
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -635,63 +847,125 @@ export default function LeadsBoard() {
 
                       {/* Name & Phone */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontWeight: "700", color: "#ffffff", fontSize: "14px" }}>
+                        <div
+                          style={{
+                            fontWeight: "700",
+                            color: "#ffffff",
+                            fontSize: "14px",
+                          }}
+                        >
                           {lead.first_name} {lead.last_name || ""}
                         </div>
-                        <div style={{ color: "#00d4ff", fontSize: "12px", marginTop: "2px", fontFamily: "monospace" }}>
+                        <div
+                          style={{
+                            color: "#00d4ff",
+                            fontSize: "12px",
+                            marginTop: "2px",
+                            fontFamily: "monospace",
+                          }}
+                        >
                           {lead.phone_e164}
                         </div>
                       </td>
 
                       {/* Firm & Specialty */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontWeight: "600", color: "#ffffff", fontSize: "13px" }}>
+                        <div
+                          style={{
+                            fontWeight: "600",
+                            color: "#ffffff",
+                            fontSize: "13px",
+                          }}
+                        >
                           {lead.firm_name || lead.company_name || "Law Office"}
                         </div>
-                        <div style={{ color: "var(--text-secondary)", fontSize: "12px", marginTop: "2px" }}>
-                          {lead.practice_area_spoken || lead.practice_area || "Attorney"}
+                        <div
+                          style={{
+                            color: "var(--text-secondary)",
+                            fontSize: "12px",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {lead.practice_area_spoken ||
+                            lead.practice_area ||
+                            "Attorney"}
                         </div>
                       </td>
 
                       {/* Call Attempts */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
                           <span
                             style={{
                               fontSize: "12px",
                               fontWeight: "700",
                               padding: "2px 8px",
                               borderRadius: "6px",
-                              background: attempts > 0 ? "rgba(192, 132, 252, 0.15)" : "rgba(0, 212, 255, 0.15)",
+                              background:
+                                attempts > 0
+                                  ? "rgba(192, 132, 252, 0.15)"
+                                  : "rgba(0, 212, 255, 0.15)",
                               color: attempts > 0 ? "#c084fc" : "#00d4ff",
                               border: `1px solid ${attempts > 0 ? "rgba(192, 132, 252, 0.3)" : "rgba(0, 212, 255, 0.3)"}`,
                             }}
                           >
-                            {attempts === 0 ? "0 Dials (Fresh)" : `${attempts} Dials Made`}
+                            {attempts === 0
+                              ? "0 Dials (Fresh)"
+                              : `${attempts} Dials Made`}
                           </span>
                         </div>
                       </td>
 
                       {/* Last Activity */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontSize: "12px", color: "var(--text-primary)", fontWeight: "600" }}>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "var(--text-primary)",
+                            fontWeight: "600",
+                          }}
+                        >
                           {lead.last_called_at
-                            ? new Date(lead.last_called_at).toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                            ? new Date(lead.last_called_at).toLocaleDateString(
+                                [],
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )
                             : "Not called yet"}
                         </div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
-                          Status: <span style={{ color: "#ffffff", fontWeight: "600" }}>{lead.status}</span>
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--text-muted)",
+                            marginTop: "2px",
+                          }}
+                        >
+                          Status:{" "}
+                          <span style={{ color: "#ffffff", fontWeight: "600" }}>
+                            {lead.status}
+                          </span>
                         </div>
                       </td>
 
                       {/* Action Buttons */}
                       <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            gap: "8px",
+                          }}
+                        >
                           {/* 📞 Call Now Button */}
                           <button
                             onClick={() => handleManualCall(lead)}
@@ -713,17 +987,21 @@ export default function LeadsBoard() {
                             onMouseEnter={(e) => {
                               e.currentTarget.style.background = "#00d4ff";
                               e.currentTarget.style.color = "#040914";
-                              e.currentTarget.style.boxShadow = "0 0 14px rgba(0, 212, 255, 0.5)";
+                              e.currentTarget.style.boxShadow =
+                                "0 0 14px rgba(0, 212, 255, 0.5)";
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "rgba(0, 212, 255, 0.15)";
+                              e.currentTarget.style.background =
+                                "rgba(0, 212, 255, 0.15)";
                               e.currentTarget.style.color = "#00d4ff";
                               e.currentTarget.style.boxShadow = "none";
                             }}
                             title="Call this lead now"
                           >
                             <Phone size={13} />
-                            {actionLoading === lead.id ? "Calling..." : "Call Now"}
+                            {actionLoading === lead.id
+                              ? "Calling..."
+                              : "Call Now"}
                           </button>
 
                           {/* 💬 Quick SMS Button */}
@@ -731,7 +1009,7 @@ export default function LeadsBoard() {
                             onClick={() => {
                               setSmsModalLead(lead);
                               setSmsBody(
-                                `Hi ${lead.first_name}, Alexa here from AI Search Engineers. Just wanted to share our quick ChatGPT audit for ${lead.firm_name}. Worth a quick 5-min chat?`
+                                `Hi ${lead.first_name}, Alexa here from AI Search Engineers. Just wanted to share our quick ChatGPT audit for ${lead.firm_name}. Worth a quick 5-min chat?`,
                               );
                             }}
                             style={{
@@ -822,11 +1100,27 @@ export default function LeadsBoard() {
               boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)",
             }}
           >
-            <h3 style={{ fontSize: "17px", fontWeight: "700", color: "#ffffff", marginBottom: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <h3
+              style={{
+                fontSize: "17px",
+                fontWeight: "700",
+                color: "#ffffff",
+                marginBottom: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
               <Send size={16} style={{ color: "#00d4ff" }} />
               Send SMS to {smsModalLead.first_name}
             </h3>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
+            <p
+              style={{
+                fontSize: "12px",
+                color: "var(--text-secondary)",
+                marginBottom: "14px",
+              }}
+            >
               {smsModalLead.firm_name} • {smsModalLead.phone_e164}
             </p>
 
@@ -850,12 +1144,28 @@ export default function LeadsBoard() {
             />
 
             {smsSuccess && (
-              <div style={{ color: "#10b981", fontSize: "13px", fontWeight: "600", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div
+                style={{
+                  color: "#10b981",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  marginBottom: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
                 <CheckCircle2 size={15} /> SMS sent successfully!
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
               <button
                 onClick={() => setSmsModalLead(null)}
                 style={{
@@ -876,7 +1186,8 @@ export default function LeadsBoard() {
                 style={{
                   padding: "8px 18px",
                   borderRadius: "8px",
-                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
+                  background:
+                    "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
                   border: "none",
                   color: "#040914",
                   cursor: "pointer",
