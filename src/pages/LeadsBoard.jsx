@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import supabase from "../supabase";
 import {
   Users,
@@ -11,14 +11,16 @@ import {
   CheckCircle2,
   Calendar,
   MessageSquare,
-  Sparkles,
-  PhoneForwarded,
   Flame,
+  Play,
+  Square,
+  Sparkles,
+  PhoneCall,
   Check,
   Building2,
   MapPin,
-  Briefcase,
   Layers,
+  CheckSquare,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrender.com";
@@ -26,9 +28,17 @@ const API_URL = import.meta.env.VITE_API_URL || "https://aise-cold-caller.onrend
 export default function LeadsBoard() {
   const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [activeTab, setActiveTab] = useState("need_calling"); // "need_calling" | "called" | "hot" | "dnc"
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState(null);
+
+  // Checkbox Selection State
+  const [selectedLeadIds, setSelectedLeadIds] = useState(new Set());
+
+  // Batch Calling State
+  const [batchCalling, setBatchCalling] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentName: "" });
+  const stopBatchRef = useRef(false);
 
   // Quick SMS Modal State
   const [smsModalLead, setSmsModalLead] = useState(null);
@@ -39,41 +49,17 @@ export default function LeadsBoard() {
   const fetchLeads = async () => {
     setLoading(true);
     try {
-      const query = supabase
+      const { data, error } = await supabase
         .from("leads")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(250);
 
-      const { data, error } = await query;
       if (error) {
-        console.warn("⚠️ [LeadsBoard] Supabase query error:", error.message);
+        console.warn("⚠️ [LeadsBoard] Supabase error:", error.message);
         setAllLeads([]);
       } else {
-        const rawLeads = data || [];
-
-        // Auto-correct any dialed leads that are still marked as READY
-        const needsCorrection = rawLeads.filter(
-          (l) => (l.attempt_count > 0 || l.last_called_at) && l.status === "READY"
-        );
-
-        if (needsCorrection.length > 0) {
-          for (const l of needsCorrection) {
-            const newStage = Math.max(l.follow_up_stage || 1, 1);
-            l.status = "FOLLOW_UP";
-            l.follow_up_stage = newStage;
-            await supabase
-              .from("leads")
-              .update({
-                status: "FOLLOW_UP",
-                follow_up_stage: newStage,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", l.id);
-          }
-        }
-
-        setAllLeads(rawLeads);
+        setAllLeads(data || []);
       }
     } catch (err) {
       console.error("❌ [LeadsBoard] Error:", err.message);
@@ -87,44 +73,34 @@ export default function LeadsBoard() {
     fetchLeads();
   }, []);
 
-  // Local window status helper
-  const getWindowStatus = (timezone) => {
-    try {
-      const now = new Date();
-      const options = {
-        timeZone: timezone || "America/New_York",
-        hour: "numeric",
-        minute: "numeric",
-        weekday: "short",
-        hour12: false,
-      };
-      const formatter = new Intl.DateTimeFormat("en-US", options);
-      const parts = formatter.formatToParts(now);
-      let hour = 0;
-      let minute = 0;
-      let weekday = "";
-      for (const p of parts) {
-        if (p.type === "hour") hour = parseInt(p.value, 10);
-        if (p.type === "minute") minute = parseInt(p.value, 10);
-        if (p.type === "weekday") weekday = p.value;
-      }
-      if (weekday === "Sat" || weekday === "Sun") {
-        return { isOpen: false, label: "Weekend", fullLabel: "Weekend (Closed)" };
-      }
-      const dec = hour + minute / 60;
-      const isOpen = dec >= 8.0 && dec < 17.5;
-      const timeStr = `${hour % 12 || 12}:${minute < 10 ? "0" : ""}${minute} ${hour >= 12 ? "PM" : "AM"}`;
-      return {
-        isOpen,
-        timeStr,
-        label: isOpen ? "Calling Open" : "Closed",
-        fullLabel: `${timeStr} (${isOpen ? "Open" : "Closed"})`,
-      };
-    } catch {
-      return { isOpen: true, timeStr: "Now", label: "Open", fullLabel: "Open" };
+  // Clear selection on tab switch
+  useEffect(() => {
+    setSelectedLeadIds(new Set());
+  }, [activeTab]);
+
+  // Checkbox helpers
+  const toggleSelectLead = (id) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (filteredList) => {
+    if (filteredList.length > 0 && selectedLeadIds.size === filteredList.length) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredList.map((l) => l.id)));
     }
   };
 
+  const clearSelection = () => {
+    setSelectedLeadIds(new Set());
+  };
+
+  // Manual 1-Click Call
   const handleManualCall = async (lead) => {
     setActionLoading(lead.id);
     try {
@@ -144,10 +120,10 @@ export default function LeadsBoard() {
       });
       const data = await res.json();
       if (data.success || data.id) {
-        alert(`📞 Call dispatched for ${lead.first_name || lead.phone_e164}!`);
+        alert(`📞 Call initiated for ${lead.first_name || lead.phone_e164}!`);
         fetchLeads();
       } else {
-        alert(`❌ Call failed: ${data.error || "Unknown error"}`);
+        alert(`❌ Call failed: ${data.error || "Check backend / Vapi credentials"}`);
       }
     } catch (err) {
       alert(`❌ Error dispatching call: ${err.message}`);
@@ -156,6 +132,66 @@ export default function LeadsBoard() {
     }
   };
 
+  // Sequential Batch Calling for selected or tab leads
+  const handleStartBatchCalling = async (leadsToCall) => {
+    if (leadsToCall.length === 0) {
+      alert("No leads selected to call.");
+      return;
+    }
+    if (!confirm(`Start calling ${leadsToCall.length} selected lead(s) one-by-one?`)) return;
+
+    setBatchCalling(true);
+    stopBatchRef.current = false;
+    setBatchProgress({ current: 0, total: leadsToCall.length, currentName: "" });
+
+    for (let i = 0; i < leadsToCall.length; i++) {
+      if (stopBatchRef.current) {
+        alert("🛑 Batch calling paused/stopped.");
+        break;
+      }
+
+      const lead = leadsToCall[i];
+      setBatchProgress({
+        current: i + 1,
+        total: leadsToCall.length,
+        currentName: `${lead.first_name || ""} ${lead.last_name || ""} (${lead.phone_e164})`,
+      });
+
+      try {
+        await fetch(`${API_URL}/api/make-call`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: lead.id,
+            leadId: lead.id,
+            phone: lead.phone_e164,
+            firstName: lead.first_name,
+            lastName: lead.last_name,
+            firmName: lead.firm_name,
+            practiceArea: lead.practice_area,
+            city: lead.city,
+          }),
+        });
+      } catch (err) {
+        console.error("Error dialing lead in batch:", lead.first_name, err);
+      }
+
+      // 4-second polite gap between calls
+      if (i < leadsToCall.length - 1 && !stopBatchRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+      }
+    }
+
+    setBatchCalling(false);
+    fetchLeads();
+  };
+
+  const handleStopBatch = () => {
+    stopBatchRef.current = true;
+    setBatchCalling(false);
+  };
+
+  // SMS Handler
   const handleSendSms = async () => {
     if (!smsBody.trim() || !smsModalLead) return;
     setSmsSending(true);
@@ -186,30 +222,65 @@ export default function LeadsBoard() {
     }
   };
 
+  // DNC Handler
   const handleMarkDnc = async (lead) => {
     if (!confirm(`Add ${lead.phone_e164} (${lead.first_name}) to Do Not Call?`)) return;
     try {
       await supabase.from("do_not_call").upsert(
-        {
-          phone: lead.phone_e164,
-          reason: "Manually marked DNC from Live Leads Board",
-        },
+        { phone: lead.phone_e164, reason: "Manual DNC mark from Leads Board" },
         { onConflict: "phone" }
       );
-
       await supabase
         .from("leads")
         .update({ status: "DO_NOT_CONTACT", updated_at: new Date().toISOString() })
         .eq("id", lead.id);
-
       fetchLeads();
     } catch (err) {
       alert(`Error updating DNC: ${err.message}`);
     }
   };
 
-  const filteredLeads = allLeads.filter((l) => {
-    if (filterStatus !== "ALL" && l.status !== filterStatus) return false;
+  // Restore from DNC
+  const handleRestoreFromDnc = async (lead) => {
+    try {
+      await supabase.from("do_not_call").delete().eq("phone", lead.phone_e164);
+      await supabase
+        .from("leads")
+        .update({ status: "FOLLOW_UP", updated_at: new Date().toISOString() })
+        .eq("id", lead.id);
+      fetchLeads();
+    } catch (err) {
+      alert(`Error restoring lead: ${err.message}`);
+    }
+  };
+
+  // Categorize leads into 4 Clean Tabs
+  const needCallingLeads = allLeads.filter(
+    (l) =>
+      !["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER", "BOOKED"].includes(l.status) &&
+      (l.status === "READY" || l.status === "NEW" || l.status === "FOLLOW_UP" || (l.attempt_count || 0) < 5)
+  );
+
+  const alreadyCalledLeads = allLeads.filter(
+    (l) => (l.attempt_count || 0) > 0 && l.status !== "DO_NOT_CONTACT"
+  );
+
+  const hotLeads = allLeads.filter((l) =>
+    ["INTERESTED", "BOOKED", "CALLBACK_REQUESTED", "REPLIED"].includes(l.status)
+  );
+
+  const dncLeads = allLeads.filter((l) =>
+    ["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER"].includes(l.status)
+  );
+
+  // Active Tab list
+  let currentList = needCallingLeads;
+  if (activeTab === "called") currentList = alreadyCalledLeads;
+  if (activeTab === "hot") currentList = hotLeads;
+  if (activeTab === "dnc") currentList = dncLeads;
+
+  // Filter by search
+  const filteredList = currentList.filter((l) => {
     const term = searchTerm.toLowerCase();
     if (!term) return true;
     return (
@@ -222,206 +293,64 @@ export default function LeadsBoard() {
     );
   });
 
-  // Calculate Stat Pill Counts
-  const counts = {
-    total: allLeads.length,
-    ready: allLeads.filter((l) => l.status === "READY").length,
-    inSequence: allLeads.filter((l) => l.status === "FOLLOW_UP").length,
-    interested: allLeads.filter((l) => l.status === "INTERESTED").length,
-    booked: allLeads.filter((l) => l.status === "BOOKED").length,
-    replied: allLeads.filter((l) => l.status === "REPLIED").length,
-    callback: allLeads.filter((l) => l.status === "CALLBACK_REQUESTED").length,
-    dnc: allLeads.filter((l) => l.status === "DO_NOT_CONTACT").length,
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "BOOKED":
-        return <span className="badge badge-green">🎯 Booked</span>;
-      case "INTERESTED":
-        return <span className="badge badge-cyan">🔥 Interested</span>;
-      case "REPLIED":
-        return <span className="badge badge-yellow">💬 Replied</span>;
-      case "CALLBACK_REQUESTED":
-        return <span className="badge badge-cyan" style={{ borderColor: "#818cf8", color: "#a5b4fc", background: "rgba(129, 140, 248, 0.15)" }}>⏰ Callback</span>;
-      case "CALLING":
-        return <span className="badge badge-cyan" style={{ animation: "pulseGlow 1.5s infinite" }}>📞 Calling</span>;
-      case "FOLLOW_UP":
-        return <span className="badge badge-cyan" style={{ borderColor: "#c084fc", color: "#e879f9", background: "rgba(192, 132, 252, 0.15)" }}>📅 In Sequence</span>;
-      case "READY":
-        return <span className="badge badge-cyan" style={{ borderColor: "rgba(0, 212, 255, 0.4)", color: "#38bdf8", background: "rgba(0, 212, 255, 0.1)" }}>⏳ Ready</span>;
-      case "DO_NOT_CONTACT":
-        return <span className="badge badge-red">🛑 DNC</span>;
-      case "NURTURE":
-        return <span className="badge badge-gray" style={{ color: "#94a3b8", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>🌱 Nurture</span>;
-      default:
-        return <span className="badge badge-gray" style={{ color: "#94a3b8", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>{status || "NEW"}</span>;
-    }
-  };
+  const isAllSelected = filteredList.length > 0 && selectedLeadIds.size === filteredList.length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }} className="animate-fade-in">
-      {/* Header & Controls */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-            <div
-              style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)",
-                border: "1px solid rgba(0, 212, 255, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--accent)",
-                boxShadow: "0 0 20px rgba(0, 212, 255, 0.2)",
-              }}
-            >
-              <Users size={22} />
-            </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }} className="animate-fade-in">
+      {/* Batch Calling In-Progress Notification */}
+      {batchCalling && (
+        <div
+          className="glass-card"
+          style={{
+            background: "linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)",
+            border: "1px solid #00d4ff",
+            padding: "16px 20px",
+            borderRadius: "14px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            boxShadow: "0 0 25px rgba(0, 212, 255, 0.3)",
+            animation: "pulseGlow 2s infinite",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <PhoneCall size={24} style={{ color: "#00d4ff", animation: "bounce 1s infinite" }} />
             <div>
-              <h1 style={{ fontSize: "22px", fontFamily: "var(--font-display)", fontWeight: "800", color: "#ffffff", letterSpacing: "-0.02em" }}>
-                Live Leads & Outreach Board
-              </h1>
-              <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
-                State-machine tracking for all persistent leads across the 12-business-day sequence.
-              </p>
+              <div style={{ fontSize: "15px", fontWeight: "800", color: "#ffffff" }}>
+                ⚡ Calling in Progress: {batchProgress.current} of {batchProgress.total}
+              </div>
+              <div style={{ fontSize: "12px", color: "#93c5fd" }}>
+                Calling now: <strong>{batchProgress.currentName}</strong> (4s delay between calls)
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Top Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <button
-            onClick={async () => {
-              if (!confirm("Start dialing ready leads whose calling window is open?")) return;
-              setActionLoading("batch-dial");
-              try {
-                const res = await fetch(`${API_URL}/api/scheduler/dial-ready`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ limit: 10 }),
-                });
-                const data = await res.json();
-                alert(`🚀 Scheduler Batch: Triggered ${data.triggered || 0} outbound calls!`);
-                fetchLeads();
-              } catch (err) {
-                alert(`❌ Error starting dialer: ${err.message}`);
-              } finally {
-                setActionLoading(null);
-              }
-            }}
-            disabled={actionLoading === "batch-dial"}
+            onClick={handleStopBatch}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              background: "linear-gradient(135deg, #00d4ff 0%, #0088ff 100%)",
-              color: "#040914",
+              gap: "6px",
+              background: "#ef4444",
+              color: "#ffffff",
               border: "none",
-              borderRadius: "10px",
-              padding: "9px 18px",
+              borderRadius: "8px",
+              padding: "8px 16px",
               fontSize: "13px",
               fontWeight: "700",
               cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(0, 212, 255, 0.3)",
-              transition: "all 0.2s",
+              boxShadow: "0 4px 14px rgba(239, 68, 68, 0.4)",
             }}
           >
-            <Phone size={15} />
-            {actionLoading === "batch-dial" ? "Dialing..." : "Start Auto-Dialer Now"}
-          </button>
-
-          <button
-            onClick={fetchLeads}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(15, 23, 42, 0.8)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              borderRadius: "10px",
-              padding: "9px 16px",
-              color: "var(--text-primary)",
-              fontSize: "13px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              backdropFilter: "blur(8px)",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)")}
-          >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} style={{ color: "var(--accent)" }} />
-            Refresh
+            <Square size={14} fill="#ffffff" />
+            Stop Calling
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Stats Counter Ribbon */}
+      {/* Main Tabs Header */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: "12px",
-        }}
-      >
-        {[
-          { label: "Total Leads", count: counts.total, color: "#00d4ff", icon: Layers },
-          { label: "Ready to Dial", count: counts.ready, color: "#38bdf8", icon: Clock },
-          { label: "In Sequence", count: counts.inSequence, color: "#c084fc", icon: Calendar },
-          { label: "Interested", count: counts.interested, color: "#f59e0b", icon: Flame },
-          { label: "Booked", count: counts.booked, color: "#10b981", icon: CheckCircle2 },
-          { label: "SMS Replied", count: counts.replied, color: "#fbbf24", icon: MessageSquare },
-        ].map((item, i) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={i}
-              className="glass-card"
-              style={{
-                padding: "14px 16px",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                borderRadius: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: "34px",
-                  height: "34px",
-                  borderRadius: "8px",
-                  background: `${item.color}15`,
-                  border: `1px solid ${item.color}35`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: item.color,
-                }}
-              >
-                <Icon size={17} />
-              </div>
-              <div>
-                <div style={{ fontSize: "18px", fontWeight: "800", color: "#ffffff", lineHeight: 1.2 }}>
-                  {item.count}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600" }}>
-                  {item.label}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Filter Tabs & Search Card */}
-      <div
-        className="glass-card"
-        style={{
-          padding: "14px 18px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -429,50 +358,64 @@ export default function LeadsBoard() {
           gap: "14px",
         }}
       >
-        {/* Status Filter Tabs */}
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {/* 4 Clean Tabs */}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           {[
-            { id: "ALL", label: "All Leads", count: counts.total },
-            { id: "READY", label: "Ready", count: counts.ready },
-            { id: "FOLLOW_UP", label: "In Sequence", count: counts.inSequence },
-            { id: "INTERESTED", label: "Interested", count: counts.interested },
-            { id: "BOOKED", label: "Booked", count: counts.booked },
-            { id: "REPLIED", label: "Replied", count: counts.replied },
-            { id: "CALLBACK_REQUESTED", label: "Callback", count: counts.callback },
-            { id: "DO_NOT_CONTACT", label: "DNC", count: counts.dnc },
+            {
+              id: "need_calling",
+              label: "📞 Need Calling (Aaj Ki Leads)",
+              count: needCallingLeads.length,
+              color: "#00d4ff",
+            },
+            {
+              id: "called",
+              label: "📋 Already Called / Follow-up",
+              count: alreadyCalledLeads.length,
+              color: "#c084fc",
+            },
+            {
+              id: "hot",
+              label: "🔥 Hot & Meetings",
+              count: hotLeads.length,
+              color: "#f59e0b",
+            },
+            {
+              id: "dnc",
+              label: "🛑 Do Not Call",
+              count: dncLeads.length,
+              color: "#ef4444",
+            },
           ].map((tab) => {
-            const isActive = filterStatus === tab.id;
+            const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setFilterStatus(tab.id)}
+                onClick={() => setActiveTab(tab.id)}
                 style={{
-                  padding: "7px 13px",
-                  borderRadius: "9px",
-                  fontSize: "12px",
-                  fontWeight: isActive ? "700" : "500",
+                  padding: "10px 18px",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  fontWeight: isActive ? "800" : "600",
                   cursor: "pointer",
-                  border: isActive ? "1px solid rgba(0, 212, 255, 0.4)" : "1px solid rgba(255, 255, 255, 0.06)",
-                  background: isActive
-                    ? "linear-gradient(135deg, rgba(0, 212, 255, 0.18) 0%, rgba(0, 136, 255, 0.1) 100%)"
-                    : "rgba(10, 15, 29, 0.5)",
-                  color: isActive ? "#00d4ff" : "var(--text-secondary)",
-                  boxShadow: isActive ? "0 2px 10px rgba(0, 212, 255, 0.2)" : "none",
+                  border: isActive ? `1px solid ${tab.color}60` : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: isActive ? `${tab.color}20` : "rgba(15, 23, 42, 0.7)",
+                  color: isActive ? "#ffffff" : "var(--text-secondary)",
+                  boxShadow: isActive ? `0 4px 18px ${tab.color}35` : "none",
                   transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
+                  gap: "8px",
                 }}
               >
                 <span>{tab.label}</span>
                 <span
                   style={{
-                    fontSize: "10px",
-                    padding: "1px 6px",
-                    borderRadius: "6px",
-                    background: isActive ? "rgba(0, 212, 255, 0.25)" : "rgba(255, 255, 255, 0.06)",
-                    color: isActive ? "#ffffff" : "var(--text-muted)",
-                    fontWeight: "700",
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "20px",
+                    background: isActive ? tab.color : "rgba(255, 255, 255, 0.1)",
+                    color: isActive ? "#040914" : "var(--text-primary)",
+                    fontWeight: "800",
                   }}
                 >
                   {tab.count}
@@ -482,272 +425,368 @@ export default function LeadsBoard() {
           })}
         </div>
 
-        {/* Search Bar */}
-        <div style={{ position: "relative", minWidth: "260px" }}>
-          <Search size={15} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-          <input
-            type="text"
-            placeholder="Search name, firm, phone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+        {/* Action Buttons & Search */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Dynamic Call Selected vs Call All Button */}
+          {selectedLeadIds.size > 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={() => {
+                  const selectedLeads = filteredList.filter((l) => selectedLeadIds.has(l.id));
+                  handleStartBatchCalling(selectedLeads);
+                }}
+                disabled={batchCalling}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
+                  color: "#040914",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "9px 18px",
+                  fontSize: "13px",
+                  fontWeight: "800",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(0, 212, 255, 0.4)",
+                }}
+              >
+                <PhoneCall size={14} />
+                Call Selected ({selectedLeadIds.size})
+              </button>
+
+              <button
+                onClick={clearSelection}
+                style={{
+                  padding: "9px 13px",
+                  borderRadius: "10px",
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  color: "var(--text-secondary)",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Clear ({selectedLeadIds.size})
+              </button>
+            </div>
+          ) : (
+            activeTab === "need_calling" && (
+              <button
+                onClick={() => handleStartBatchCalling(filteredList)}
+                disabled={batchCalling || filteredList.length === 0}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
+                  color: "#040914",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "9px 18px",
+                  fontSize: "13px",
+                  fontWeight: "800",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(0, 212, 255, 0.35)",
+                }}
+              >
+                <Play size={14} fill="#040914" />
+                Call All In This Tab ({filteredList.length})
+              </button>
+            )
+          )}
+
+          {/* Search Input */}
+          <div style={{ position: "relative", minWidth: "220px" }}>
+            <Search
+              size={14}
+              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}
+            />
+            <input
+              type="text"
+              placeholder="Search name, firm, phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: "8px 12px 8px 32px",
+                width: "100%",
+                fontSize: "12px",
+                background: "rgba(10, 16, 30, 0.8)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "8px",
+                color: "#ffffff",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          {/* Refresh */}
+          <button
+            onClick={fetchLeads}
             style={{
-              padding: "8px 14px 8px 34px",
-              width: "100%",
-              fontSize: "12px",
-              background: "rgba(10, 16, 30, 0.8)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              padding: "8px 12px",
               borderRadius: "8px",
+              background: "rgba(15, 23, 42, 0.8)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
               color: "#ffffff",
-              outline: "none",
-              transition: "border-color 0.2s",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              fontWeight: "600",
             }}
-            onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
-            onBlur={(e) => (e.target.style.borderColor = "rgba(255, 255, 255, 0.1)")}
-          />
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} style={{ color: "#00d4ff" }} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Leads Table Card */}
-      <div className="glass-card" style={{ padding: "0", overflow: "hidden" }}>
+      {/* Leads Table */}
+      <div className="glass-card" style={{ padding: "0", overflow: "hidden", borderRadius: "14px" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
-              <tr style={{ background: "rgba(255, 255, 255, 0.02)", borderBottom: "1px solid var(--border)" }}>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Lead / Contact
+              <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid var(--border)" }}>
+                {/* Select All Checkbox */}
+                <th style={{ width: "46px", padding: "14px 16px", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={() => toggleSelectAll(filteredList)}
+                    style={{
+                      cursor: "pointer",
+                      width: "16px",
+                      height: "16px",
+                      accentColor: "#00d4ff",
+                    }}
+                    title={isAllSelected ? "Deselect All" : "Select All"}
+                  />
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                  Lead Name & Contact
+                </th>
+                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
                   Firm & Specialty
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Timezone & Local Window
+                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                  Call Attempts
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Sequence Stage
+                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase" }}>
+                  Last Activity
                 </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Status
-                </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Next Scheduled
-                </th>
-                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>
-                  Quick Actions
+                <th style={{ padding: "14px 20px", color: "var(--text-muted)", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", textAlign: "right" }}>
+                  Actions
                 </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
-                    <RefreshCw size={26} className="animate-spin" style={{ margin: "0 auto 12px", color: "var(--accent)" }} />
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-primary)" }}>Loading persistent outreach leads...</div>
+                  <td colSpan={6} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
+                    <RefreshCw size={26} className="animate-spin" style={{ margin: "0 auto 10px", color: "#00d4ff" }} />
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>Loading leads data...</div>
                   </td>
                 </tr>
-              ) : filteredLeads.length === 0 ? (
+              ) : filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
-                    <Users size={32} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-primary)" }}>No leads found in this view</div>
-                    <div style={{ fontSize: "12px", marginTop: "4px" }}>Upload a CSV campaign to populate new leads automatically.</div>
+                  <td colSpan={6} style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
+                    <Users size={32} style={{ margin: "0 auto 10px", opacity: 0.4 }} />
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#ffffff" }}>No leads in this tab</div>
+                    <div style={{ fontSize: "12px", marginTop: "4px" }}>Search filter reset karein ya leads upload karein.</div>
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map((lead) => {
-                  const win = getWindowStatus(lead.timezone);
-                  const stageNum = lead.follow_up_stage || 0;
+                filteredList.map((lead) => {
+                  const attempts = lead.attempt_count || 0;
+                  const isSelected = selectedLeadIds.has(lead.id);
 
                   return (
                     <tr
                       key={lead.id}
                       style={{
                         borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
+                        background: isSelected ? "rgba(0, 212, 255, 0.05)" : "transparent",
                         transition: "background 0.2s",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "transparent";
+                      }}
                     >
-                      {/* Contact Info */}
+                      {/* Row Checkbox */}
+                      <td style={{ width: "46px", padding: "14px 16px", textAlign: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectLead(lead.id)}
+                          style={{
+                            cursor: "pointer",
+                            width: "16px",
+                            height: "16px",
+                            accentColor: "#00d4ff",
+                          }}
+                        />
+                      </td>
+
+                      {/* Name & Phone */}
                       <td style={{ padding: "14px 20px" }}>
                         <div style={{ fontWeight: "700", color: "#ffffff", fontSize: "14px" }}>
                           {lead.first_name} {lead.last_name || ""}
                         </div>
-                        <div style={{ color: "var(--accent)", fontSize: "12px", marginTop: "2px", fontFamily: "monospace" }}>
+                        <div style={{ color: "#00d4ff", fontSize: "12px", marginTop: "2px", fontFamily: "monospace" }}>
                           {lead.phone_e164}
                         </div>
                       </td>
 
                       {/* Firm & Specialty */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontWeight: "600", color: "var(--text-primary)", fontSize: "13px" }}>
-                          {lead.firm_name || lead.company_name || "Independent"}
+                        <div style={{ fontWeight: "600", color: "#ffffff", fontSize: "13px" }}>
+                          {lead.firm_name || lead.company_name || "Law Office"}
                         </div>
-                        <div style={{ color: "var(--text-secondary)", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
-                          <span>{lead.practice_area_spoken || lead.practice_area || "Attorney"}</span>
-                          <span>•</span>
-                          <span style={{ color: "var(--text-muted)" }}>{lead.city || "USA"}</span>
+                        <div style={{ color: "var(--text-secondary)", fontSize: "12px", marginTop: "2px" }}>
+                          {lead.practice_area_spoken || lead.practice_area || "Attorney"}
                         </div>
                       </td>
 
-                      {/* Timezone & Window */}
+                      {/* Call Attempts */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "3px 9px",
-                            borderRadius: "6px",
-                            background: win.isOpen ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.1)",
-                            border: win.isOpen ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(239, 68, 68, 0.2)",
-                          }}
-                        >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span
                             style={{
-                              height: "6px",
-                              width: "6px",
-                              borderRadius: "50%",
-                              background: win.isOpen ? "#10b981" : "#ef4444",
-                              boxShadow: win.isOpen ? "0 0 8px #10b981" : "none",
+                              fontSize: "12px",
+                              fontWeight: "700",
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              background: attempts > 0 ? "rgba(192, 132, 252, 0.15)" : "rgba(0, 212, 255, 0.15)",
+                              color: attempts > 0 ? "#c084fc" : "#00d4ff",
+                              border: `1px solid ${attempts > 0 ? "rgba(192, 132, 252, 0.3)" : "rgba(0, 212, 255, 0.3)"}`,
                             }}
-                          />
-                          <span style={{ fontSize: "12px", color: win.isOpen ? "#34d399" : "#f87171", fontWeight: "700" }}>
-                            {win.fullLabel}
+                          >
+                            {attempts === 0 ? "0 Dials (Fresh)" : `${attempts} Dials Made`}
                           </span>
                         </div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px" }}>
-                          {lead.timezone || "America/New_York"}
-                        </div>
                       </td>
 
-                      {/* Sequence Stage */}
-                      <td style={{ padding: "14px 20px" }}>
-                        <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>
-                          Stage {stageNum} <span style={{ color: "var(--text-muted)", fontSize: "11px", fontWeight: "500" }}>/ 5</span>
-                        </div>
-                        <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                          {lead.attempt_count || 0} dials • {lead.voicemail_count || 0} VMs
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ padding: "14px 20px" }}>{getStatusBadge(lead.status)}</td>
-
-                      {/* Next Scheduled Action */}
+                      {/* Last Activity */}
                       <td style={{ padding: "14px 20px" }}>
                         <div style={{ fontSize: "12px", color: "var(--text-primary)", fontWeight: "600" }}>
-                          {lead.next_action_at
-                            ? new Date(lead.next_action_at).toLocaleDateString([], {
+                          {lead.last_called_at
+                            ? new Date(lead.last_called_at).toLocaleDateString([], {
                                 month: "short",
                                 day: "numeric",
-                              })
-                            : "—"}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                          {lead.next_action_at
-                            ? new Date(lead.next_action_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })
-                            : ""}
+                            : "Not called yet"}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+                          Status: <span style={{ color: "#ffffff", fontWeight: "600" }}>{lead.status}</span>
                         </div>
                       </td>
 
-                      {/* Actions */}
+                      {/* Action Buttons */}
                       <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                          {/* Call Button */}
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                          {/* 📞 Call Now Button */}
                           <button
                             onClick={() => handleManualCall(lead)}
-                            disabled={actionLoading === lead.id}
+                            disabled={actionLoading === lead.id || batchCalling}
                             style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "8px",
-                              background: "rgba(0, 212, 255, 0.1)",
-                              border: "1px solid rgba(0, 212, 255, 0.25)",
-                              color: "#00d4ff",
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
+                              gap: "6px",
+                              background: "rgba(0, 212, 255, 0.15)",
+                              border: "1px solid rgba(0, 212, 255, 0.4)",
+                              color: "#00d4ff",
+                              borderRadius: "8px",
+                              padding: "6px 12px",
+                              fontSize: "12px",
+                              fontWeight: "700",
                               cursor: "pointer",
                               transition: "all 0.2s",
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "rgba(0, 212, 255, 0.25)";
-                              e.currentTarget.style.boxShadow = "0 0 12px rgba(0, 212, 255, 0.4)";
+                              e.currentTarget.style.background = "#00d4ff";
+                              e.currentTarget.style.color = "#040914";
+                              e.currentTarget.style.boxShadow = "0 0 14px rgba(0, 212, 255, 0.5)";
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "rgba(0, 212, 255, 0.1)";
+                              e.currentTarget.style.background = "rgba(0, 212, 255, 0.15)";
+                              e.currentTarget.style.color = "#00d4ff";
                               e.currentTarget.style.boxShadow = "none";
                             }}
-                            title="Trigger Outbound Call"
+                            title="Call this lead now"
                           >
-                            <Phone size={14} />
+                            <Phone size={13} />
+                            {actionLoading === lead.id ? "Calling..." : "Call Now"}
                           </button>
 
-                          {/* SMS Button */}
+                          {/* 💬 Quick SMS Button */}
                           <button
                             onClick={() => {
                               setSmsModalLead(lead);
                               setSmsBody(
-                                `Hi ${lead.first_name}, Alexa at AI Search Engineers. Following up on our search for ${lead.practice_area_spoken || 'attorneys'} in ${lead.city}. Worth 10 mins?`
+                                `Hi ${lead.first_name}, Alexa here from AI Search Engineers. Just wanted to share our quick ChatGPT audit for ${lead.firm_name}. Worth a quick 5-min chat?`
                               );
                             }}
                             style={{
-                              width: "32px",
-                              height: "32px",
+                              padding: "6px 10px",
                               borderRadius: "8px",
                               background: "rgba(56, 189, 248, 0.1)",
                               border: "1px solid rgba(56, 189, 248, 0.25)",
                               color: "#38bdf8",
+                              cursor: "pointer",
+                              fontSize: "12px",
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              transition: "all 0.2s",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "rgba(56, 189, 248, 0.25)";
-                              e.currentTarget.style.boxShadow = "0 0 12px rgba(56, 189, 248, 0.4)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "rgba(56, 189, 248, 0.1)";
-                              e.currentTarget.style.boxShadow = "none";
                             }}
                             title="Send SMS"
                           >
-                            <MessageSquare size={14} />
+                            <MessageSquare size={13} />
                           </button>
 
-                          {/* DNC Button */}
-                          <button
-                            onClick={() => handleMarkDnc(lead)}
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "8px",
-                              background: "rgba(239, 68, 68, 0.1)",
-                              border: "1px solid rgba(239, 68, 68, 0.25)",
-                              color: "#ef4444",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              transition: "all 0.2s",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "rgba(239, 68, 68, 0.25)";
-                              e.currentTarget.style.boxShadow = "0 0 12px rgba(239, 68, 68, 0.4)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
-                              e.currentTarget.style.boxShadow = "none";
-                            }}
-                            title="Add to Do Not Call"
-                          >
-                            <ShieldAlert size={14} />
-                          </button>
+                          {/* 🛑 DNC Button / Restore Button */}
+                          {activeTab === "dnc" ? (
+                            <button
+                              onClick={() => handleRestoreFromDnc(lead)}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "8px",
+                                background: "rgba(16, 185, 129, 0.15)",
+                                border: "1px solid rgba(16, 185, 129, 0.3)",
+                                color: "#34d399",
+                                cursor: "pointer",
+                                fontSize: "11px",
+                                fontWeight: "700",
+                              }}
+                              title="Restore lead"
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleMarkDnc(lead)}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "8px",
+                                background: "rgba(239, 68, 68, 0.1)",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                color: "#ef4444",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                              title="Mark Do Not Call"
+                            >
+                              <ShieldAlert size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -765,7 +804,7 @@ export default function LeadsBoard() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
+            background: "rgba(0, 0, 0, 0.8)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -773,12 +812,21 @@ export default function LeadsBoard() {
             backdropFilter: "blur(6px)",
           }}
         >
-          <div className="glass-card" style={{ width: "480px", maxWidth: "90%", padding: "26px", border: "1px solid rgba(0, 212, 255, 0.3)", boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#ffffff", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Send size={18} style={{ color: "var(--accent)" }} />
+          <div
+            className="glass-card"
+            style={{
+              width: "460px",
+              maxWidth: "90%",
+              padding: "24px",
+              border: "1px solid rgba(0, 212, 255, 0.3)",
+              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)",
+            }}
+          >
+            <h3 style={{ fontSize: "17px", fontWeight: "700", color: "#ffffff", marginBottom: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Send size={16} style={{ color: "#00d4ff" }} />
               Send SMS to {smsModalLead.first_name}
             </h3>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "16px" }}>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "14px" }}>
               {smsModalLead.firm_name} • {smsModalLead.phone_e164}
             </p>
 
@@ -795,16 +843,15 @@ export default function LeadsBoard() {
                 color: "#ffffff",
                 fontSize: "13px",
                 resize: "none",
-                marginBottom: "16px",
+                marginBottom: "14px",
                 outline: "none",
-                fontFamily: "var(--font-body)",
               }}
               placeholder="Type your SMS message..."
             />
 
             {smsSuccess && (
-              <div style={{ color: "#10b981", fontSize: "13px", fontWeight: "600", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                <CheckCircle2 size={16} /> SMS sent successfully!
+              <div style={{ color: "#10b981", fontSize: "13px", fontWeight: "600", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <CheckCircle2 size={15} /> SMS sent successfully!
               </div>
             )}
 
@@ -819,7 +866,6 @@ export default function LeadsBoard() {
                   color: "var(--text-secondary)",
                   cursor: "pointer",
                   fontSize: "13px",
-                  fontWeight: "600",
                 }}
               >
                 Cancel
@@ -828,15 +874,14 @@ export default function LeadsBoard() {
                 onClick={handleSendSms}
                 disabled={smsSending || !smsBody.trim()}
                 style={{
-                  padding: "8px 20px",
+                  padding: "8px 18px",
                   borderRadius: "8px",
-                  background: "linear-gradient(135deg, #00d4ff 0%, #0088ff 100%)",
+                  background: "linear-gradient(135deg, #00d4ff 0%, #0077ff 100%)",
                   border: "none",
                   color: "#040914",
                   cursor: "pointer",
                   fontSize: "13px",
                   fontWeight: "700",
-                  boxShadow: "0 4px 14px rgba(0, 212, 255, 0.3)",
                 }}
               >
                 {smsSending ? "Sending..." : "Send SMS"}
