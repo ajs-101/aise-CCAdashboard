@@ -306,13 +306,13 @@ export default function LeadsBoard() {
   // Categorize leads into 4 Clean Tabs
   const needCallingLeads = allLeads.filter(
     (l) =>
-      !["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER", "BOOKED"].includes(
+      !["DO_NOT_CONTACT", "WRONG_PERSON", "INVALID_NUMBER", "BOOKED", "NURTURE", "COMPLETED"].includes(
         l.status,
       ) &&
       (l.status === "READY" ||
         l.status === "NEW" ||
-        l.status === "FOLLOW_UP" ||
-        (l.attempt_count || 0) < 5),
+        l.status === "FOLLOW_UP") &&
+      (l.attempt_count || 0) < 3,
   );
 
   const alreadyCalledLeads = allLeads.filter(
