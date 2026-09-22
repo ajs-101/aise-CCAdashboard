@@ -377,7 +377,7 @@ export default function Campaigns() {
             </label>
             <input
               type="number"
-              min="2"
+              min="1"
               max="300"
               value={delaySeconds}
               onChange={function (e) {
@@ -547,7 +547,14 @@ export default function Campaigns() {
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "32px" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          marginBottom: "32px",
+        }}
+      >
         <button
           onClick={handleUploadClick}
           disabled={!file || uploading}
@@ -886,7 +893,9 @@ export default function Campaigns() {
                       : "var(--accent-yellow)",
                   }}
                 >
-                  {respectHours ? "Enforced (9am-5pm EST)" : "Disabled (Call anytime)"}
+                  {respectHours
+                    ? "Enforced (9am-5pm EST)"
+                    : "Disabled (Call anytime)"}
                 </span>
               </div>
             </div>
