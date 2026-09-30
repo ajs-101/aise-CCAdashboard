@@ -20,15 +20,23 @@ export default function DailyReport() {
 
   const fetchCallsForDate = async (dateStr) => {
     setLoading(true)
-    // Filter calls created on selected date (local/UTC coverage)
-    const startDate = `${dateStr}T00:00:00.000Z`
-    const endDate = `${dateStr}T23:59:59.999Z`
+    // Widen window by 1 day on each side to account for timezone differences
+    const targetDate = new Date(dateStr)
+    const prevDate = new Date(targetDate)
+    prevDate.setDate(targetDate.getDate() - 1)
+    const nextDate = new Date(targetDate)
+    nextDate.setDate(targetDate.getDate() + 1)
+    
+    const dbStartDate = `${prevDate.toISOString().split('T')[0]}T00:00:00.000Z`
+    const dbEndDate = `${nextDate.toISOString().split('T')[0]}T23:59:59.999Z`
 
-    // Also fetch all calls to filter by local date string matching
+    // Fetch calls within the widened window to avoid 1000 row limit truncating recent calls
     const { data } = await supabase
       .from('calls')
       .select('*')
-      .order('created_at', { ascending: true })
+      .gte('created_at', dbStartDate)
+      .lte('created_at', dbEndDate)
+      .order('created_at', { ascending: false })
 
     const dateFiltered = (data || []).filter(c => {
       if (!c.created_at) return false

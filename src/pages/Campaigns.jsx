@@ -15,6 +15,7 @@ export default function Campaigns() {
 
   const [delaySeconds, setDelaySeconds] = useState(5);
   const [respectHours, setRespectHours] = useState(true);
+  const [script, setScript] = useState("aise");
 
   const [testPhone, setTestPhone] = useState("");
   const [testName, setTestName] = useState("");
@@ -40,6 +41,7 @@ export default function Campaigns() {
         companyName: testCompany || "",
         practiceArea: testPractice || "attorney",
         city: testCity || "your area",
+        script: script,
       });
       if (res.data.status === "queued") {
         setTestResult(
@@ -92,6 +94,7 @@ export default function Campaigns() {
     formData.append("file", file);
     formData.append("delaySeconds", delaySeconds);
     formData.append("respectHours", respectHours);
+    formData.append("script", script);
 
     try {
       const res = await axios.post(API_URL + "/api/upload-csv", formData, {
@@ -101,7 +104,6 @@ export default function Campaigns() {
         setError(res.data.error || "Campaign failed");
       } else {
         setResults(res.data);
-        // Clear file from state to prevent accidental repeat clicks
         setFile(null);
         const fileInput = document.getElementById("csv-input");
         if (fileInput) fileInput.value = "";
@@ -156,6 +158,101 @@ export default function Campaigns() {
         <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>
           Test a single call or upload a CSV to start a campaign
         </p>
+      </div>
+
+      {/* Script Selector */}
+      <div
+        style={{
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "24px",
+          marginBottom: "24px",
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "15px",
+            fontWeight: "700",
+            marginBottom: "16px",
+            color: "var(--accent)",
+          }}
+        >
+          Select Script
+        </h3>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button
+            onClick={function () {
+              setScript("aise");
+            }}
+            style={{
+              flex: 1,
+              padding: "16px 24px",
+              background:
+                script === "aise" ? "var(--accent-dim)" : "var(--bg-secondary)",
+              border:
+                "2px solid " +
+                (script === "aise" ? "var(--accent)" : "var(--border)"),
+              borderRadius: "12px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.2s",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "14px",
+                fontWeight: "700",
+                color:
+                  script === "aise" ? "var(--accent)" : "var(--text-primary)",
+                marginBottom: "4px",
+              }}
+            >
+              Script #2 — A.I. Search Engineers
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+              Ranked & recommended by Google and AI systems
+            </div>
+          </button>
+          <button
+            onClick={function () {
+              setScript("trustpoint");
+            }}
+            style={{
+              flex: 1,
+              padding: "16px 24px",
+              background:
+                script === "trustpoint"
+                  ? "var(--accent-dim)"
+                  : "var(--bg-secondary)",
+              border:
+                "2px solid " +
+                (script === "trustpoint" ? "var(--accent)" : "var(--border)"),
+              borderRadius: "12px",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.2s",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "14px",
+                fontWeight: "700",
+                color:
+                  script === "trustpoint"
+                    ? "var(--accent)"
+                    : "var(--text-primary)",
+                marginBottom: "4px",
+              }}
+            >
+              Script #1 — Trustpoint
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+              Traditional PR + advanced AI positioning
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Test Single Call */}
@@ -758,7 +855,7 @@ export default function Campaigns() {
         </div>
       ) : null}
 
-      {/* Confirmation Modal to Prevent Double-Calling */}
+      {/* Confirmation Modal */}
       {showConfirmModal && (
         <div
           style={{
@@ -842,6 +939,23 @@ export default function Campaigns() {
                 lineHeight: "1.6",
               }}
             >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ color: "var(--text-secondary)" }}>Script:</span>
+                <span
+                  style={{
+                    fontWeight: "600",
+                    color: "var(--accent)",
+                  }}
+                >
+                  {script === "aise" ? "A.I. Search Engineers" : "Trustpoint"}
+                </span>
+              </div>
               <div
                 style={{
                   display: "flex",
